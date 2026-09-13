@@ -1,8 +1,11 @@
 import type {
+  AuthView,
   DailyPaper,
   DomainId,
+  DossierView,
   InterestVerdict,
   PipelineProgress,
+  ProfileView,
   RouteName,
   UserProfile,
 } from "@/domain/types";
@@ -20,6 +23,16 @@ export interface RuntimeState {
   profile: UserProfile;
   pipeline: PipelineProgress | null;
   seenInterestCards: Record<string, InterestVerdict>;
+  /** 后端画像视图（/api/profile 映射），未加载时为 null。 */
+  profileView: ProfileView | null;
+  /** 主动策展结果（/api/topic/:topic），发现页消费。 */
+  dossier: { state: "idle" | "loading" | "error"; topic: string; view: DossierView | null };
+  /** 知乎登录状态（/api/auth/me + /api/health）。 */
+  auth: AuthView;
+  /** 后端可选的学习方向预设标签（cold_start_options）。 */
+  directionOptions: string[];
+  /** 已提交给 /api/feedback 的阅读反馈：source_id → feedback。 */
+  readingFeedback: Record<string, string>;
 }
 
 type Listener = (state: RuntimeState) => void;

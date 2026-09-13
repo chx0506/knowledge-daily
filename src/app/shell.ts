@@ -88,6 +88,22 @@ export function createShell(root: {
         actions.resetDiscover();
         return;
       }
+      if (action === "send-feedback" && target.dataset.cardId && target.dataset.feedback) {
+        actions.sendReadingFeedback(
+          target.dataset.cardId,
+          target.dataset.topic ?? "",
+          target.dataset.feedback as Parameters<typeof actions.sendReadingFeedback>[2],
+        );
+        return;
+      }
+      if (action === "toggle-direction" && target.dataset.topic) {
+        actions.toggleDirection(target.dataset.topic);
+        return;
+      }
+      if (action === "login") {
+        actions.login();
+        return;
+      }
       if (target.dataset.go) {
         actions.go(target.dataset.go as RouteName);
       }

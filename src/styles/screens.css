@@ -1902,3 +1902,238 @@
     transform: none;
   }
 }
+
+/* ---------- 后端接通：提示条 / skipped 领域 / 徽标 / 反馈 / 专题 / 画像 ---------- */
+
+.paper-notice {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 8px 12px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--navy);
+  background: #eef1f6;
+  color: var(--navy);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.paper-notice b {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.home-tab.is-skipped {
+  color: #b6ad9f;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.domain-skipped {
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.domain-skipped-reason {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.domain-skipped-hint {
+  margin: 6px 0 0;
+  color: #b6ad9f;
+  font-size: 11px;
+}
+
+.domain-tier {
+  color: var(--navy);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.brief-source-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--navy);
+  border-radius: 2px;
+  color: var(--navy);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.brief-feedback {
+  display: inline-flex;
+  gap: 10px;
+  margin-left: 12px;
+}
+
+.brief-feedback button {
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.brief-feedback-done {
+  display: inline-block;
+  margin-left: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dossier {
+  margin: 18px 16px 24px;
+  padding-top: 14px;
+  border-top: 2px solid var(--ink);
+}
+
+.dossier-title {
+  margin: 6px 0 10px;
+  font-size: 17px;
+  font-family: var(--poster);
+  font-weight: var(--poster-weight);
+  letter-spacing: var(--poster-tracking);
+}
+
+.dossier-form {
+  display: flex;
+  gap: 8px;
+}
+
+.dossier-form input {
+  flex: 1;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #c9c0b2;
+  background: var(--paper2);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.dossier-form button {
+  height: 42px;
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dossier-form button:disabled,
+.dossier-form input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dossier-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dossier-note.is-error {
+  color: var(--red);
+}
+
+.dossier-result {
+  margin-top: 16px;
+}
+
+.dossier-result h2 {
+  margin: 6px 0 8px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.dossier-basis {
+  margin: 0 0 10px;
+  color: var(--navy);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dossier-result .bodycopy p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.mine-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.mine-tag {
+  padding: 9px 10px;
+  border: 1px solid #d8d0c4;
+  background: var(--paper2);
+}
+
+.mine-tag b {
+  font-size: 13px;
+}
+
+.mine-tag span {
+  margin-left: 8px;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mine-tag button {
+  display: block;
+  margin-top: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mine-coverage {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.mine-sub {
+  margin: 14px 0 6px;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.mine-platform {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mine-platform li {
+  padding: 6px 0;
+  border-bottom: 1px solid #e5ded2;
+}
+
+.mine-platform button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}

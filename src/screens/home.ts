@@ -133,9 +133,26 @@ function renderRecommend(paper: DailyPaper, from: RouteName): string {
 
 function renderPane(state: RuntimeState, paper: DailyPaper, tab: DomainId, from: RouteName): string {
   if (tab === "recommend") return renderRecommend(paper, from);
+  if (!paper.domains.some((block) => block.domainId === tab)) {
+    const skipped = paper.skipped?.find((item) => item.id === tab);
+    return html`
+      <div class="domain-page domain-embedded domain-skipped">
+        <p class="dek">「${domainMeta(tab).name}」今天没有送到。</p>
+        <p class="domain-skipped-reason">${skipped?.reason ?? "今日未生成这一领域。"}</p>
+        <p class="domain-skipped-hint">去「发现」页做一次主动策展，或在「我的」里调整学习方向。</p>
+      </div>
+    `;
+  }
   const block = findDomainBlock(paper, tab);
   const storyId = state.homeTab === tab ? state.storyId : block.lead.id;
   return renderDomainArticle(state, { embedded: true, domainId: tab, storyId, paper, from });
+}
+
+function renderNotice(paper: DailyPaper): string {
+  const warnings = paper.warnings ?? [];
+  if (!warnings.length) return "";
+  const tag = paper.origin === "fixture" ? "离线" : paper.stale ? "缓存" : "提示";
+  return `<div class="paper-notice" role="status"><b>${tag}</b><span>${warnings[0]}</span></div>`;
 }
 
 export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, from: RouteName): string {
@@ -151,10 +168,13 @@ export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, fro
       <div class="front-mast-aside">${padIssue(paper.issueNo)}<br />看山派送</div>
     </header>
 
+    ${renderNotice(paper)}
+
     <nav class="home-tabs" data-home-tabs>
       ${HOME_TABS.map((id) => {
         const meta = domainMeta(id);
-        return `<button class="home-tab${homeTab === id ? " is-active" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}</button>`;
+        const skipped = id !== "recommend" && !paper.domains.some((block) => block.domainId === id);
+        return `<button class="home-tab${homeTab === id ? " is-active" : ""}${skipped ? " is-skipped" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}</button>`;
       }).join("")}
     </nav>
 

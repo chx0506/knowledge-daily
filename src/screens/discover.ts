@@ -1,5 +1,5 @@
 import { INTEREST_CARDS } from "@/data/mock/interest-cards";
-import type { InterestCard, InterestVerdict } from "@/domain/types";
+import type { DossierView, InterestCard, InterestVerdict } from "@/domain/types";
 import { escapeHtml, html } from "@/shared/html";
 import type { Actions } from "@/app/actions";
 import type { RuntimeState } from "@/app/store";
@@ -48,6 +48,68 @@ function renderCard(card: InterestCard, depth: number): string {
   `;
 }
 
+function renderDossierResult(view: DossierView): string {
+  return html`
+    <article class="dossier-result">
+      <div class="page-kicker">专题策展 / ${escapeHtml(view.topic)}</div>
+      <h2>${escapeHtml(view.judgement)}</h2>
+      ${view.basisText ? `<p class="dossier-basis">${escapeHtml(view.basisText)}</p>` : ""}
+      <section class="bodycopy">
+        ${view.report.map((para) => `<p>${escapeHtml(para)}</p>`).join("")}
+      </section>
+      ${view.readings.length
+        ? html`
+            <section class="brief-readings">
+              <h3>值得看的 ${view.readings.length} 篇</h3>
+              ${view.readings
+                .map(
+                  (item, index) => html`
+                    <article class="brief-reading">
+                      <b>${index + 1}. ${escapeHtml(item.title)}</b>
+                      <span>${item.sourceType ? `<em class="brief-source-badge">${escapeHtml(item.sourceType)}</em>` : ""}${escapeHtml(item.source)}</span>
+                      <p>${escapeHtml(item.why)}</p>
+                      <button type="button" data-action="open-source" data-url="${item.url}">打开原文 →</button>
+                    </article>
+                  `,
+                )
+                .join("")}
+            </section>
+          `
+        : ""}
+    </article>
+  `;
+}
+
+function renderDossierSection(state: RuntimeState): string {
+  const { dossier } = state;
+  return html`
+    <section class="dossier">
+      <div class="page-kicker">TOPIC / 主动策展</div>
+      <h2 class="dossier-title">想看什么，让看山就它编一期。</h2>
+      <form class="dossier-form" data-dossier-form>
+        <input
+          type="text"
+          name="topic"
+          maxlength="30"
+          placeholder="输入主题，如「AI Agent」「RAG 检索增强」"
+          value="${escapeHtml(dossier.topic)}"
+          ${dossier.state === "loading" ? "disabled" : ""}
+        />
+        <button type="submit" ${dossier.state === "loading" ? "disabled" : ""}>
+          ${dossier.state === "loading" ? "策展中…" : "策展一次"}
+        </button>
+      </form>
+      ${dossier.state === "loading"
+        ? `<p class="dossier-note">看山正在就「${escapeHtml(dossier.topic)}」做专题短调研，要约 30 秒…</p>`
+        : ""}
+      ${dossier.state === "error"
+        ? `<p class="dossier-note is-error">这次没有策展成功：后端不可达或额度耗尽，稍后再试。</p>`
+        : ""}
+      ${dossier.view ? renderDossierResult(dossier.view) : ""}
+    </section>
+  `;
+}
+
 export function renderDiscover(state: RuntimeState): string {
   const deck = remainingCards(state.seenInterestCards);
   const liked = Object.entries(state.seenInterestCards)
@@ -70,6 +132,7 @@ export function renderDiscover(state: RuntimeState): string {
             : "<p class=\"empty-note\">这一轮里你还没有收下任何一张。</p>"}
           <button class="reset-deck" type="button" data-action="reset-discover">再看一轮</button>
         </section>
+        ${renderDossierSection(state)}
       </div>
     `;
   }
@@ -100,11 +163,20 @@ export function renderDiscover(state: RuntimeState): string {
           <span>感兴趣</span>
         </button>
       </div>
+      ${renderDossierSection(state)}
     </div>
   `;
 }
 
 export function mountDiscover(root: HTMLElement, _state: RuntimeState, actions: Actions): void {
+  const form = root.querySelector<HTMLFormElement>("[data-dossier-form]");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = form.elements.namedItem("topic");
+    const topic = input instanceof HTMLInputElement ? input.value : "";
+    void actions.curateTopic(topic);
+  });
+
   const deck = root.querySelector<HTMLElement>(".interest-deck");
   if (!deck) return;
 

@@ -17,6 +17,94 @@ function readingSummary(state: RuntimeState): string {
   return `${length}，${morning}，${weekend}`;
 }
 
+function renderAuthBlock(state: RuntimeState): string {
+  const { auth } = state;
+  if (auth.state === "in") {
+    return html`
+      <section class="mine-block">
+        <h2>知乎账号</h2>
+        <p>已登录：${escapeHtml(auth.name ?? "知乎用户")}。日报会按你自己的关注、收藏与创作来编。</p>
+      </section>
+    `;
+  }
+  if (auth.oauthReady) {
+    return html`
+      <section class="mine-block">
+        <h2>知乎账号</h2>
+        <p>登录后，日报按你自己的知乎信号来编，而不是公共样本。</p>
+        <button class="mine-generate" type="button" data-action="login">登录知乎 →</button>
+      </section>
+    `;
+  }
+  return html`
+    <section class="mine-block">
+      <h2>知乎账号</h2>
+      <p>后端未配置 OAuth 凭证，当前以赛事 Access Secret 身份取数，登录入口暂不开放。</p>
+    </section>
+  `;
+}
+
+function renderProfileViewBlock(state: RuntimeState): string {
+  const view = state.profileView;
+  if (!view) return "";
+  return html`
+    <section class="mine-block">
+      <h2>你的知乎画像</h2>
+      <p>${escapeHtml(view.summary)}（置信度 ${escapeHtml(view.confidence)}）</p>
+      <div class="mine-tags">
+        ${view.tags
+          .map(
+            (tag) => html`
+              <div class="mine-tag">
+                <b>${escapeHtml(tag.name)}</b>
+                <span>${Math.round(tag.weight * 100)} 分 · ${escapeHtml(tag.confidenceTier)}</span>
+                ${tag.evidence[0]?.url
+                  ? `<button type="button" data-action="open-source" data-url="${tag.evidence[0].url}">${escapeHtml(tag.evidence[0].label)} ↗</button>`
+                  : ""}
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <p class="mine-coverage">${view.coverage.map((item) => `${item.label} ${item.value}`).join(" · ")}</p>
+      ${view.platformItems.length
+        ? html`
+            <h3 class="mine-sub">知乎官方推荐（未加工）</h3>
+            <ul class="mine-platform">
+              ${view.platformItems
+                .map(
+                  (item) =>
+                    `<li><button type="button" data-action="open-source" data-url="${item.url}">${escapeHtml(item.title)} ↗</button></li>`,
+                )
+                .join("")}
+            </ul>
+          `
+        : ""}
+    </section>
+  `;
+}
+
+function renderDirectionsBlock(state: RuntimeState): string {
+  const view = state.profileView;
+  if (!view) return "";
+  const options = [...new Set([...state.directionOptions, ...view.directions])];
+  if (!options.length) return "";
+  return html`
+    <section class="mine-block">
+      <h2>学习方向</h2>
+      <p>写进知乎画像的高置信度信号，下次出报优先采用。</p>
+      <div class="mine-topics" role="group" aria-label="学习方向">
+        ${options
+          .map((direction) => {
+            const on = view.directions.includes(direction);
+            return `<button class="mine-topic${on ? " is-on" : ""}" type="button" data-action="toggle-direction" data-topic="${escapeHtml(direction)}" aria-pressed="${on}">${escapeHtml(direction)}</button>`;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
 export function renderProfile(state: RuntimeState): string {
   const { quotaUsed, quotaTotal, readerName, briefLength, morningPush, weekendSkip } = state.profile;
   const topics = state.selectedTopics;
@@ -57,6 +145,8 @@ export function renderProfile(state: RuntimeState): string {
         </div>
       </div>
 
+      ${renderAuthBlock(state)}
+
       <section class="mine-block">
         <h2>你的领域</h2>
         <p>点选栏目，看山明天按这个单子来编。最多 10 个。</p>
@@ -69,6 +159,10 @@ export function renderProfile(state: RuntimeState): string {
         <div class="mine-count">已选 ${topics.length} / 10</div>
         <button class="mine-generate" type="button" data-action="generate">按新领域出报</button>
       </section>
+
+      ${renderDirectionsBlock(state)}
+
+      ${renderProfileViewBlock(state)}
 
       <section class="mine-block">
         <h2>阅读口味</h2>
