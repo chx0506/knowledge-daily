@@ -1,0 +1,61 @@
+:root {
+  --paper: #f4efe6;
+  --paper2: #fffdf8;
+  --ink: #16120f;
+  --red: #c4161c;
+  --navy: #0c1d4d;
+  --line: #1b1713;
+  --muted: #7a7368;
+  --stage: #d9e3e8;
+  --serif: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+  --poster: "Noto Serif SC", "Songti SC", "STSong", "Source Han Serif SC", serif;
+  --poster-weight: 900;
+  --poster-tracking: -0.05em;
+  --poster-leading: 0.88;
+  --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, monospace;
+}
+
+.front-brand,
+.brand,
+.front-hero-main h2,
+.hero-main h2,
+.brief-judgment,
+.interest-body h2,
+.interest-stamp.like,
+.story-card h2,
+.story-card h3,
+.story-cover h2,
+.story-special h2,
+.stagecopy h1 span,
+.home-tab.is-active,
+.tab.active,
+.front-top5-row small,
+.top5-row small,
+.front-quote span,
+.brief-reading button,
+.story-kicker b,
+.mast-date b,
+.discover-empty li b,
+.mine-who h1 {
+  color: var(--red);
+  font-family: var(--poster);
+  font-weight: var(--poster-weight);
+  letter-spacing: var(--poster-tracking);
+  font-synthesis: none;
+  font-feature-settings: "palt" 1;
+}
+
+.front-brand,
+.brand,
+.front-hero-main h2,
+.hero-main h2,
+.interest-body h2,
+.story-card h2,
+.story-card h3,
+.story-cover h2,
+.story-special h2,
+.stagecopy h1 span,
+.mine-who h1 {
+  line-height: var(--poster-leading);
+}
