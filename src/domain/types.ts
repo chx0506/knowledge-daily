@@ -6,6 +6,7 @@ export type RouteName =
   | "calendar"
   | "discover"
   | "mine"
+  | "map"
   | "onboard"
   | "loading"
   | "result"
@@ -80,6 +81,7 @@ export interface DailyPaper {
   hero: {
     kicker: string;
     title: string;
+    titleLines?: string[];
     subtitle: string;
     asideTitle: string;
     asidePoints: string[];

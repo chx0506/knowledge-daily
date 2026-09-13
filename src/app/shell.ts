@@ -11,12 +11,18 @@ export function createShell(root: {
   let currentRoute = "";
 
   function renderTabs(state: RuntimeState, actions: Actions) {
-    root.tabs.innerHTML = tabs
-      .map((tab) => {
-        const active = tab.route === state.route ? " active" : "";
-        return `<button class="tab${active}" type="button" data-go="${tab.route}"><span class="tab-icon">${tab.icon}</span><span class="tab-label">${tab.label}</span></button>`;
-      })
-      .join("");
+    const buttons = tabs.map((tab) => {
+      const active = tab.route === state.route ? " active" : "";
+      return `<button class="tab${active}" type="button" data-go="${tab.route}"><span class="tab-icon">${tab.icon}</span><span class="tab-label">${tab.label}</span></button>`;
+    });
+    const onMap = state.route === "map";
+    const pose = onMap ? "/nav/nav-kanshan-tilt.png" : "/nav/nav-kanshan.png";
+    buttons.splice(
+      2,
+      0,
+      `<button class="tab-mascot${onMap ? " is-on" : ""}" type="button" data-go="map" aria-label="看山地图"><img src="${pose}" alt="" width="80" height="64" draggable="false" /></button>`,
+    );
+    root.tabs.innerHTML = buttons.join("");
 
     root.tabs.onclick = (event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>("[data-go]");
