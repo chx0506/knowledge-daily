@@ -2116,12 +2116,11 @@
 
 .map-postmark {
   position: absolute;
-  top: 6px;
-  right: 4px;
+  top: 8px;
+  right: 6px;
   z-index: 5;
-  width: 158px;
+  width: 148px;
   height: auto;
-  mix-blend-mode: multiply;
 }
 
 .map-compass {
