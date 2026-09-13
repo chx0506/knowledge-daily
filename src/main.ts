@@ -8,6 +8,7 @@
 import { createActions } from "@/app/actions";
 import { createShell } from "@/app/shell";
 import { createStore } from "@/app/store";
+import { mountWidgetShowcase } from "@/app/widget-showcase";
 import { archiveRepo } from "@/data/repositories/archive-repo";
 import { PREFERENCE_KEY, preferenceRepo } from "@/data/repositories/preference-repo";
 import { remoteEditionRepo } from "@/data/repositories/remote-edition-repo";
@@ -57,6 +58,11 @@ async function bootstrap() {
   shell.bindApp(actions);
   store.subscribe((state) => shell.render(state, actions));
   shell.render(store.get(), actions);
+
+  const widgetSlot = document.querySelector<HTMLElement>("#widget-showcase");
+  if (widgetSlot) {
+    mountWidgetShowcase(widgetSlot, store);
+  }
 
   void actions.checkAuth();
 }

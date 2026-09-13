@@ -82,6 +82,119 @@ body {
   font: 900 24px var(--serif);
 }
 
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 46px;
+}
+
+/* 桌面小组件预览（iOS 主屏小组件气质 × 报纸语言） */
+.wshow .overline {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.wshow-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.wshow-widget {
+  display: flex;
+  flex-direction: column;
+  width: 216px;
+  height: 216px;
+  padding: 16px 16px 14px;
+  border: 1px solid #e2d8ca;
+  border-radius: 34px;
+  background: #f8f3ea;
+  box-shadow:
+    0 18px 34px #40586633,
+    inset 0 1px 0 #fffc;
+}
+
+.wshow-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wshow-brand {
+  font: 900 15px var(--serif);
+  color: var(--red);
+  letter-spacing: 0.02em;
+}
+
+.wshow-date {
+  font: 700 9px var(--mono);
+  color: #7a6f5f;
+  letter-spacing: 0.04em;
+}
+
+.wshow-kicker {
+  margin-top: 10px;
+  overflow: hidden;
+  font: 700 9px var(--mono);
+  color: #8a7d6a;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wshow-title {
+  display: -webkit-box;
+  flex: 1;
+  margin-top: 6px;
+  overflow: hidden;
+  font: 900 15px / 1.42 var(--serif);
+  color: #16120f;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.wshow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2d8ca;
+}
+
+.wshow-stamp {
+  font: 700 8px var(--mono);
+  color: var(--red);
+  letter-spacing: 0.1em;
+}
+
+.wshow-cue {
+  overflow: hidden;
+  font-size: 9px;
+  color: #8a7d6a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wshow-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5b6c78;
+  letter-spacing: 0.04em;
+}
+
+.wshow-note {
+  max-width: 240px;
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #657681;
+}
+
 .sidecopy p,
 .sidecopy .flow {
   font-size: 14px;
@@ -305,7 +418,8 @@ body {
   }
 
   .stagecopy,
-  .sidecopy {
+  .sidecopy,
+  .wshow {
     display: none;
   }
 
