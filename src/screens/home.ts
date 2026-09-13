@@ -7,36 +7,49 @@ import type { Actions } from "@/app/actions";
 import type { RuntimeState } from "@/app/store";
 import { renderDomainArticle } from "./domain";
 
-function wrapPoster(title: string, maxChars = 5): string {
-  const tokens = title.match(/[A-Za-z0-9]+|[，。]|[^\sA-Za-z0-9，。]/g) ?? [];
-  const chunks: string[] = [];
-  let buf = "";
-  let width = 0;
-  for (const tok of tokens) {
-    if (tok === "，" || tok === "。") {
-      buf += tok;
-      chunks.push(buf);
-      buf = "";
-      width = 0;
-      continue;
-    }
-    const unit = /[A-Za-z0-9]/.test(tok) ? 2 : 1;
-    if (width + unit > maxChars && buf) {
-      chunks.push(buf);
-      buf = tok;
-      width = unit;
-    } else {
-      buf += tok;
-      width += unit;
-    }
+function wrapLines(lines: string[]): string {
+  return lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("");
+}
+
+function wrapStamp(title: string): string {
+  const chars = [...title.replace(/\s/g, "")];
+  const lines: string[] = [];
+  for (let i = 0; i < chars.length; i += 2) {
+    lines.push(chars.slice(i, i + 2).join(""));
   }
-  if (buf) chunks.push(buf);
+  return wrapLines(lines);
+}
+
+function wrapHeadline(title: string, maxChars = 6): string {
+  const phrases = title.split(/(?<=[，。、])/).filter(Boolean);
+  const chunks: string[] = [];
+  for (const phrase of phrases) {
+    const tokens = phrase.match(/[A-Za-z0-9]+|[，。、]|[^\sA-Za-z0-9，。、]/g) ?? [];
+    let buf = "";
+    let width = 0;
+    for (const tok of tokens) {
+      if (tok === "，" || tok === "。" || tok === "、") {
+        buf += tok;
+        continue;
+      }
+      const unit = /[A-Za-z0-9]/.test(tok) ? Math.min(tok.length, 2) : 1;
+      if (width + unit > maxChars && buf) {
+        chunks.push(buf);
+        buf = tok;
+        width = unit;
+      } else {
+        buf += tok;
+        width += unit;
+      }
+    }
+    if (buf) chunks.push(buf);
+  }
   const last = chunks.at(-1) ?? "";
   const prev = chunks.at(-2) ?? "";
-  if (chunks.length >= 2 && last.replace(/[，。]/g, "").length <= 2 && prev.length <= 8) {
+  if (chunks.length >= 2 && last.replace(/[，。、]/g, "").length <= 2 && prev.length <= 6) {
     chunks.splice(-2, 2, prev + last);
   }
-  return chunks.map(escapeHtml).join("<br>");
+  return wrapLines(chunks);
 }
 
 function sheetPage(no: string): string {
@@ -64,22 +77,28 @@ function briefStamp(heat: string, index: number) {
 function renderRecommend(paper: DailyPaper, from: RouteName): string {
   const tech = domainMeta("tech");
   const culture = domainMeta("culture");
+  const heroTitle = paper.hero.titleLines?.length
+    ? wrapLines(paper.hero.titleLines)
+    : wrapHeadline(paper.hero.title, 6);
   return html`
     <article class="front sheet">
       <button class="sheet-hero" type="button" data-action="open-domain" data-domain-id="tech" data-story-id="${paper.hero.storyId}" data-from="${from}">
         <div class="sheet-hero-main">
           <small>${paper.hero.kicker}</small>
-          <h2>${wrapPoster(paper.hero.title, 5)}</h2>
-          <p>${paper.hero.subtitle}</p>
+          <h2>${heroTitle}</h2>
+          <div class="sheet-hero-dek">
+            <p>${paper.hero.subtitle}</p>
+            <em>READ A DEEPER WORLD</em>
+          </div>
         </div>
         <aside class="sheet-hero-side">
-          <b>${wrapPoster(paper.hero.asideTitle, 2)}</b>
-          <div class="sheet-hero-meta">
-            <ul>
-              ${paper.hero.asidePoints.map((item) => `<li>${item}</li>`).join("")}
-            </ul>
-            <i class="sheet-hero-seal" aria-hidden="true"></i>
+          <div class="sheet-hero-side-head">
+            <b>${wrapStamp(paper.hero.asideTitle)}</b>
+            <span class="sheet-hero-badge">AI<br />今日精选</span>
           </div>
+          <ul>
+            ${paper.hero.asidePoints.map((item) => `<li>${item}</li>`).join("")}
+          </ul>
           <span class="sheet-page light">${sheetPage(tech.no)}</span>
         </aside>
       </button>
@@ -90,7 +109,7 @@ function renderRecommend(paper: DailyPaper, from: RouteName): string {
             <small>文化版</small>
             <em>科技版交出去<br />这边负责减速</em>
           </div>
-          <h3>${wrapPoster("把判断留下", 3)}</h3>
+          <h3>${wrapLines(["把判断", "留下"])}</h3>
           <span class="sheet-page">${sheetPage(culture.no)}</span>
         </button>
         <button class="sheet-plate sheet-plate-icon" type="button" data-go="calendar">
@@ -99,8 +118,7 @@ function renderRecommend(paper: DailyPaper, from: RouteName): string {
             <em>同一条主线<br />按天回看</em>
           </div>
           <img class="sheet-cycle" src="/home/sheet-cycle.svg" alt="" />
-          <h3>${wrapPoster("比追新更重要", 3)}</h3>
-          <p>同一条主线，按天回看你读过的短调研</p>
+          <h3>${wrapLines(["比追新", "更重要"])}</h3>
           <span class="sheet-page">${sheetPage("7")}</span>
         </button>
       </section>
@@ -115,7 +133,7 @@ function renderRecommend(paper: DailyPaper, from: RouteName): string {
             const stamp = briefStamp(item.heat, index);
             return html`
               <div class="sheet-brief" data-action="open-domain" data-domain-id="${item.domainId}" data-story-id="${item.storyId}" data-from="${from}">
-                <b>${String(index + 1).padStart(3, "0")}</b>
+                <b>${String(index + 1).padStart(2, "0")}</b>
                 <span>${item.title}</span>
                 <small class="sheet-heat${stamp.navy ? " is-navy" : ""}" title="${stamp.title}">${stamp.mark}</small>
               </div>

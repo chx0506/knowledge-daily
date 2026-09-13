@@ -189,14 +189,16 @@ body {
 
 .bottom {
   position: absolute;
+  z-index: 40;
   right: 0;
   bottom: 0;
   left: 0;
   display: flex;
   justify-content: space-around;
-  align-items: center;
+  align-items: flex-end;
+  overflow: visible;
   height: 76px;
-  padding: 8px 10px 12px;
+  padding: 8px 6px 12px;
   border-top: 1px solid #e2d8ca;
   background: #f8f3ea;
   color: var(--ink);
@@ -217,11 +219,12 @@ body {
 
 .tab {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 64px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -231,6 +234,33 @@ body {
   letter-spacing: 0.04em;
   text-align: center;
   cursor: pointer;
+}
+
+.tab-mascot {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 74px;
+  width: 74px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tab-mascot img {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  display: block;
+  width: 80px;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.tab-mascot.is-on img {
+  width: 86px;
+  bottom: 14px;
 }
 
 .tab-icon {
