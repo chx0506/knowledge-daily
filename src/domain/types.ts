@@ -44,6 +44,10 @@ export interface DomainReading {
   source: string;
   why: string;
   url: string;
+  /** 后端 source_type：关注 | 收藏 | 创作 | 搜索，用于徽标展示。 */
+  sourceType?: string;
+  /** 后端 source_id，阅读反馈（/api/feedback）的 card_id。 */
+  cardId?: string;
 }
 
 export interface DomainStory {
@@ -62,12 +66,23 @@ export interface DomainStory {
   briefing?: string[];
   readings?: DomainReading[];
   indexNote?: string;
+  /** 后端篇幅档位：deep | standard | blind（补盲）。 */
+  tier?: "deep" | "standard" | "blind";
+  /** 后端反馈用的卡片 id（source_id / card_id）。 */
+  cardId?: string;
 }
 
 export interface DomainBlock {
   domainId: DomainId;
   lead: DomainStory;
   items: DomainStory[];
+}
+
+/** 后端今日未生成的领域（Tab 置灰并展示原因）。 */
+export interface SkippedDomain {
+  id: DomainId;
+  name: string;
+  reason: string;
 }
 
 export interface DailyPaper {
@@ -100,6 +115,14 @@ export interface DailyPaper {
     headline: string;
     stats: string;
   };
+  /** 本期今日未覆盖的领域。 */
+  skipped?: SkippedDomain[];
+  /** 后端 stale 标记：额度耗尽，展示的是上一期缓存。 */
+  stale?: boolean;
+  /** 需要提示条展示的告警（含 stale_reason）。 */
+  warnings?: string[];
+  /** 本期来源：live 实时 / stale 过期缓存 / fixture 离线样例。 */
+  origin?: "live" | "stale" | "fixture";
 }
 
 export type BriefLength = "short" | "full";
@@ -164,4 +187,48 @@ export interface PipelineStep {
 
 export interface PipelineProgress {
   steps: PipelineStep[];
+}
+
+/* ---------- 后端画像 / 专题策展视图模型（screens 直接消费） ---------- */
+
+export interface ProfileTagView {
+  name: string;
+  weight: number;
+  source: string;
+  confidenceTier: string;
+  evidence: Array<{ label: string; url: string }>;
+}
+
+export interface ProfileView {
+  summary: string;
+  confidence: string;
+  confidenceReason: string;
+  coldStart: boolean;
+  tags: ProfileTagView[];
+  directions: string[];
+  keywords: string[];
+  goal: string;
+  blocked: string[];
+  platformItems: Array<{ title: string; url: string }>;
+  platformNote: string;
+  coverage: Array<{ label: string; value: number }>;
+}
+
+export interface DossierView {
+  topic: string;
+  title: string;
+  judgement: string;
+  basisText: string;
+  report: string[];
+  readings: DomainReading[];
+  sourceCount: number;
+  generatedBy: string;
+  warnings: string[];
+}
+
+export interface AuthView {
+  state: "unknown" | "out" | "in";
+  name?: string;
+  /** 后端未配置 OAuth 凭证时为 false，登录入口置灰。 */
+  oauthReady: boolean;
 }

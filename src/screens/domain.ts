@@ -1,10 +1,11 @@
 import { allStories, findDomainBlock, findStory, domainMeta } from "@/domain/catalog";
+import { tierLabel } from "@/data/remote/map";
 import type { DailyPaper, DomainId, DomainStory, RouteName } from "@/domain/types";
 import { padIssue } from "@/shared/format";
 import { html } from "@/shared/html";
 import type { RuntimeState } from "@/app/store";
 
-function renderBriefing(article: DomainStory): string {
+function renderBriefing(state: RuntimeState, article: DomainStory, topic: string): string {
   const readings = article.readings ?? [];
   return html`
     <section class="brief-evidence">
@@ -21,16 +22,25 @@ function renderBriefing(article: DomainStory): string {
           <section class="brief-readings">
             <h3>值得看的 ${readings.length} 篇</h3>
             ${readings
-              .map(
-                (item, index) => html`
+              .map((item, index) => {
+                const given = item.cardId ? state.readingFeedback[item.cardId] : undefined;
+                return html`
                   <article class="brief-reading">
                     <b>${index + 1}. ${item.title}</b>
-                    <span>${item.source}</span>
+                    <span>${item.sourceType ? `<em class="brief-source-badge">${item.sourceType}</em>` : ""}${item.source}</span>
                     <p>${item.why}</p>
                     <button type="button" data-action="open-source" data-url="${item.url}">打开原文 →</button>
+                    ${item.cardId
+                      ? given
+                        ? `<small class="brief-feedback-done">已记下 · 明天会更准</small>`
+                        : `<span class="brief-feedback">
+                            <button type="button" data-action="send-feedback" data-card-id="${item.cardId}" data-topic="${topic}" data-feedback="want_more">想多读</button>
+                            <button type="button" data-action="send-feedback" data-card-id="${item.cardId}" data-topic="${topic}" data-feedback="irrelevant">不感兴趣</button>
+                          </span>`
+                      : ""}
                   </article>
-                `,
-              )
+                `;
+              })
               .join("")}
             ${article.indexNote ? `<p class="brief-index">${article.indexNote}</p>` : ""}
           </section>
@@ -102,7 +112,7 @@ export function renderDomainArticle(
           <div class="domain-index">${meta.no}</div>
           <div class="domain-label">${meta.name}<span>${meta.nameEn}</span></div>
         </div>
-        <div class="domain-issue">${padIssue(paper.issueNo)}<br />${paper.date.replaceAll("-", ".")}</div>
+        <div class="domain-issue">${padIssue(paper.issueNo)}<br />${paper.date.replaceAll("-", ".")}${article.tier ? `<br /><span class="domain-tier">${tierLabel(article.tier)}</span>` : ""}</div>
       </header>
       <h1>${article.title}</h1>
       <div class="metrics">
@@ -110,7 +120,7 @@ export function renderDomainArticle(
         <div><b>${article.readMinutes}</b><span>分钟读完<br />MIN READ</span></div>
         <div><b>${article.readings?.length ?? article.bullets.length}</b><span>值得先读<br />TO READ</span></div>
       </div>
-      ${isBrief ? renderBriefing(article) : renderLegacyBody(article)}
+      ${isBrief ? renderBriefing(state, article, meta.name) : renderLegacyBody(article)}
       ${more.length
         ? html`
             <section class="more-stories">
