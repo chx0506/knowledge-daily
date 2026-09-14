@@ -1,0 +1,16 @@
+{
+  "name": "dianzi-baozhi-api",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 电子报纸 · 知乎数据接口与用户画像后端（零依赖）",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "smoke": "node scripts/smoke.js",
+    "simulate": "node scripts/simulate.js"
+  }
+}
