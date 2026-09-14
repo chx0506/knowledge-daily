@@ -14,7 +14,8 @@
 //   POST /api/feedback                日报内反馈
 //   GET  /api/topic/:topic            主动策展专题
 import http from 'node:http';
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs';
+import { brotliCompressSync, gzipSync, constants as zlibConstants } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config, checkConfig, mask } from './src/config.js';
@@ -132,6 +133,35 @@ const MIME = {
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
 };
 
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.map', '.txt', '.webmanifest']);
+// 压缩结果内存缓存：静态资源带 immutable 且体积固定，压一次就够
+const compressCache = new Map();
+
+/** 按 Accept-Encoding 压缩；返回 { buf, encoding }，不值得压缩时 encoding 为 null。 */
+function compress(buf, ext, req) {
+  if (!COMPRESSIBLE.has(ext) || buf.length < 1024) return { buf, encoding: null };
+  const accept = String(req.headers['accept-encoding'] || '');
+  const key = `${ext}:${buf.length}:${accept.includes('br') ? 'br' : accept.includes('gzip') ? 'gz' : 'id'}`;
+  const hit = compressCache.get(key);
+  if (hit) return hit;
+
+  let out = { buf, encoding: null };
+  try {
+    if (/\bbr\b/.test(accept)) {
+      out = { buf: brotliCompressSync(buf, {
+        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: buf.length },
+      }), encoding: 'br' };
+    } else if (/\bgzip\b/.test(accept)) {
+      out = { buf: gzipSync(buf, { level: 6 }), encoding: 'gzip' };
+    }
+  } catch { out = { buf, encoding: null }; }
+  // 压不小就不压（避免小文件反而变大）
+  if (out.encoding && out.buf.length >= buf.length) out = { buf, encoding: null };
+  compressCache.set(key, out);
+  if (compressCache.size > 64) compressCache.delete(compressCache.keys().next().value);
+  return out;
+}
+
 function serveStatic(req, res, url) {
   if (!existsSync(STATIC_DIR)) return false;
   const relPath = decodeURIComponent(url.pathname);
@@ -144,10 +174,24 @@ function serveStatic(req, res, url) {
     if (!existsSync(file)) return false;
   }
   const ext = path.extname(file).toLowerCase();
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
-  });
+    Vary: 'Accept-Encoding',
+  };
+
+  // 文本类资源读入内存压缩后一次性发出；二进制大文件（图片/视频）仍走流式
+  if (COMPRESSIBLE.has(ext) && statSync(file).size < 8 * 1024 * 1024) {
+    const { buf, encoding } = compress(readFileSync(file), ext, req);
+    if (encoding) headers['Content-Encoding'] = encoding;
+    headers['Content-Length'] = String(buf.length);
+    res.writeHead(200, headers);
+    if (req.method === 'HEAD') { res.end(); return true; }
+    res.end(buf);
+    return true;
+  }
+
+  res.writeHead(200, headers);
   if (req.method === 'HEAD') { res.end(); return true; }
   createReadStream(file).pipe(res);
   return true;
