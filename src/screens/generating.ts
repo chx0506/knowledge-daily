@@ -22,19 +22,18 @@ export function renderGenerating(state: RuntimeState): string {
         <h1>看山正在把<br />知乎趣报送来…</h1>
         <div class="steps">
           ${steps
+            .filter((step) => step.status !== "wait")
             .map((step, index) => {
               const no = String(index + 1).padStart(2, "0");
-              const done = step.status === "done" ? " done" : "";
-              const typing =
+              const body =
                 step.status === "active"
                   ? '<span class="typing" aria-label="进行中"><i></i><i></i><i></i></span>'
-                  : "";
+                  : '<span class="msg-check" aria-label="完成">✓</span>';
               return html`
-                <div class="step${done}">
+                <div class="msg ${step.status}">
                   <i>${no}</i>
                   <b>${step.label}</b>
-                  <span class="step-detail">${step.detail}</span>
-                  ${typing}
+                  ${body}
                 </div>
               `;
             })

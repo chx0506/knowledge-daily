@@ -1,6 +1,7 @@
 import { AUTH_LOGIN_URL, api, isFixtureForced } from "@/data/remote/client";
 import { findInterestCard } from "@/data/mock/interest-cards";
 import { HOME_TABS, findDomainBlock } from "@/domain/catalog";
+import { stamp, startTyping, stopTyping } from "@/shared/typewriter-sound";
 import type { RemoteEdition } from "@/data/repositories/remote-edition-repo";
 import type { ArchiveRepo } from "@/data/repositories/archive-repo";
 import type { PreferenceRepo } from "@/data/repositories/preference-repo";
@@ -300,7 +301,10 @@ export function createActions(
           steps[i].status = "active";
           steps[i].detail = "进行中…";
           emit();
+          startTyping();
           await wait(REMOTE_STEP_DEFS[i].ms);
+          stopTyping();
+          stamp();
           steps[i].status = "done";
           steps[i].detail = "完成";
           emit();

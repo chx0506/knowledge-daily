@@ -1304,33 +1304,56 @@
 }
 
 .steps {
-  border-top: 1px solid #d8cbaa;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
 }
 
-.step {
+/* 聊天消息：一条一条冒出来 */
+.msg {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
-  border-bottom: 1px solid #e4dac4;
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #e4dac4;
+  border-radius: 4px 14px 14px 14px;
+  background: #fbf6ea;
+  box-shadow: 0 2px 0 #0001;
   font-size: 12px;
+  animation: msg-in 0.24s ease both;
 }
 
-.step i {
-  padding: 5px 7px;
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+.msg i {
+  padding: 4px 6px;
   border: 1px solid #8a7d6a;
   font-style: normal;
+  font-size: 10px;
 }
 
-.step.done i {
+.msg.done i {
   border-color: var(--red);
   background: var(--red);
   color: #f8f3ea;
 }
 
-.step-detail {
-  margin-left: auto;
-  color: #8a7d6a;
+.msg.done b {
+  color: #6b5f4c;
+}
+
+.msg-check {
+  margin-left: 2px;
+  font-weight: 900;
+  color: var(--red);
 }
 
 /* 进行中的「正在输入」三点 */
