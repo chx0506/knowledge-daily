@@ -267,7 +267,6 @@
 }
 
 .cal-top,
-.cal-weekdays,
 .cal-strip {
   position: relative;
   z-index: 3;
@@ -299,39 +298,17 @@
   background: transparent;
 }
 
-.cal-weekdays,
-.cal-week {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-auto-flow: row;
-  align-items: center;
-  justify-items: center;
-}
-
-.cal-weekdays {
-  height: 28px;
-  padding: 0 8px;
-  grid-auto-rows: 28px;
-}
-
-.cal-wd {
-  color: #8b8680;
-  font-size: 12px;
-  line-height: 1;
-  text-align: center;
-}
-
 .cal-strip {
   display: flex;
   flex-flow: row nowrap;
   width: 100%;
   min-width: 0;
-  height: 44px;
+  height: 62px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0 0 8px;
   border-bottom: 1px solid #ece6dc;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
   touch-action: pan-x;
   overscroll-behavior-x: contain;
@@ -349,63 +326,67 @@
   scroll-snap-type: none;
 }
 
-.cal-week {
-  box-sizing: border-box;
-  flex: 0 0 100%;
-  width: 100%;
-  min-width: 100%;
-  max-width: 100%;
-  height: 36px;
-  padding: 0 8px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-
-.cal-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 36px;
-}
-
 .cal-day {
   appearance: none;
+  display: flex;
+  flex: 0 0 calc(100% / 7);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  width: calc(100% / 7);
+  height: 54px;
+  margin: 0;
+  padding: 2px 0 0;
+  border: 0;
+  background: transparent;
+  color: #1a1a1a;
+  font-family: inherit;
+  cursor: pointer;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+
+.cal-day small {
+  color: #8b8680;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.cal-day span {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  margin: 0;
-  padding: 0;
-  border: 0;
   border-radius: 50%;
-  background: transparent;
-  color: #1a1a1a;
-  font-family: inherit;
   font-size: 16px;
   font-weight: 400;
-  line-height: 32px;
+  line-height: 1;
 }
 
 .cal-day.empty {
   visibility: hidden;
 }
 
-.cal-day.outside {
+.cal-day.outside,
+.cal-day.outside small {
   color: #b3ada4;
 }
 
-.cal-day.has {
+.cal-day.has span {
   font-weight: 600;
 }
 
-.cal-day.selected {
-  margin: 0;
+.cal-day.selected span {
   background: #111;
   color: #fff;
-  font-size: 16px;
-  line-height: 1;
+}
+
+.cal-day.selected small {
+  color: #1a1a1a;
 }
 
 .cal-feed {

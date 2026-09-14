@@ -47,6 +47,10 @@ function weeksOfMonth(year: number, month: number): Array<Array<{ date: string; 
   return weeks;
 }
 
+function daysOfMonth(year: number, month: number): Array<{ date: string; outside: boolean }> {
+  return weeksOfMonth(year, month).flat();
+}
+
 export function renderCalendar(state: RuntimeState): string {
   const selected = state.selectedDate;
   const [year, month] = selected.split("-").map(Number);
@@ -64,23 +68,15 @@ export function renderCalendar(state: RuntimeState): string {
           <button class="text-btn" type="button" data-action="go-today">回今天</button>
         </div>
       </header>
-      <div class="cal-weekdays">
-        ${WEEKDAYS.map((day) => `<span class="cal-wd">${day}</span>`).join("")}
-      </div>
       <div class="cal-strip" id="cal-strip">
-        ${weeksOfMonth(year, month)
-          .map((week) => {
-            const buttons = week
-              .map((cell) => {
-                const day = Number(cell.date.slice(8));
-                const selectedClass = cell.date === selected ? " selected" : "";
-                const hasClass = paperDates.has(cell.date) ? " has" : "";
-                const todayClass = cell.date === TODAY ? " today" : "";
-                const outsideClass = cell.outside ? " outside" : "";
-                return `<span class="cal-cell"><button class="cal-day${selectedClass}${hasClass}${todayClass}${outsideClass}" type="button" data-action="select-date" data-date="${cell.date}">${day}</button></span>`;
-              })
-              .join("");
-            return `<div class="cal-week">${buttons}</div>`;
+        ${daysOfMonth(year, month)
+          .map((cell) => {
+            const day = Number(cell.date.slice(8));
+            const selectedClass = cell.date === selected ? " selected" : "";
+            const hasClass = paperDates.has(cell.date) ? " has" : "";
+            const todayClass = cell.date === TODAY ? " today" : "";
+            const outsideClass = cell.outside ? " outside" : "";
+            return `<button class="cal-day${selectedClass}${hasClass}${todayClass}${outsideClass}" type="button" data-action="select-date" data-date="${cell.date}"><small>${WEEKDAYS[mondayIndex(cell.date)]}</small><span>${day}</span></button>`;
           })
           .join("")}
       </div>
@@ -102,49 +98,57 @@ export function renderCalendar(state: RuntimeState): string {
   `;
 }
 
-function mountStripSwipe(strip: HTMLElement) {
+function mountStripSwipe(strip: HTMLElement, actions: Actions) {
   const SLOP = 8;
   let pointer = 0;
   let startX = 0;
   let startScroll = 0;
-  let moved = 0;
   let dragging = false;
+  let armed = false;
+  let dragged = false;
 
-  const weekWidth = () => strip.clientWidth || 1;
+  const dayWidth = () => strip.querySelector<HTMLElement>(".cal-day")?.offsetWidth || strip.clientWidth / 7 || 1;
 
-  const snap = () => {
-    const width = weekWidth();
-    const max = Math.max(0, strip.scrollWidth - width);
+  const snapToDay = () => {
+    const width = dayWidth();
+    const max = Math.max(0, strip.scrollWidth - strip.clientWidth);
     const index = Math.round(strip.scrollLeft / width);
     const left = Math.min(max, Math.max(0, index * width));
     strip.scrollTo({ left, behavior: "smooth" });
   };
 
   strip.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
     pointer = event.pointerId;
     startX = event.clientX;
     startScroll = strip.scrollLeft;
-    moved = 0;
-    dragging = true;
-    strip.setPointerCapture(event.pointerId);
-    strip.classList.add("is-dragging");
+    armed = true;
+    dragging = false;
+    dragged = false;
   });
 
   strip.addEventListener("pointermove", (event) => {
-    if (!dragging || event.pointerId !== pointer) return;
+    if (!armed || event.pointerId !== pointer) return;
     const dx = event.clientX - startX;
-    moved = Math.max(moved, Math.abs(dx));
-    if (moved < SLOP) return;
+    if (!dragging) {
+      if (Math.abs(dx) < SLOP) return;
+      dragging = true;
+      dragged = true;
+      strip.setPointerCapture(event.pointerId);
+      strip.classList.add("is-dragging");
+    }
     event.preventDefault();
     strip.scrollLeft = startScroll - dx;
   });
 
   const endPointer = (event: PointerEvent) => {
-    if (!dragging || event.pointerId !== pointer) return;
+    if (!armed || event.pointerId !== pointer) return;
+    armed = false;
+    if (dragging) {
+      strip.classList.remove("is-dragging");
+      snapToDay();
+    }
     dragging = false;
-    strip.classList.remove("is-dragging");
-    if (moved >= SLOP) snap();
     if (strip.hasPointerCapture(event.pointerId)) strip.releasePointerCapture(event.pointerId);
   };
 
@@ -154,19 +158,27 @@ function mountStripSwipe(strip: HTMLElement) {
   strip.addEventListener(
     "click",
     (event) => {
-      if (moved < SLOP) return;
-      event.preventDefault();
+      if (dragged) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const day = (event.target as HTMLElement).closest<HTMLElement>(".cal-day");
+      const date = day?.dataset.date;
+      if (!date) return;
       event.stopPropagation();
+      actions.selectDate(date);
     },
-    true,
   );
 }
 
 export function mountCalendar(root: HTMLElement, state: RuntimeState, actions: Actions): void {
-  const selected = root.querySelector<HTMLElement>(".cal-day.selected");
   const strip = root.querySelector<HTMLElement>("#cal-strip");
-  const week = selected?.closest<HTMLElement>(".cal-week");
-  if (week && strip) strip.scrollLeft = week.offsetLeft;
-  if (strip) mountStripSwipe(strip);
+  const selected = root.querySelector<HTMLElement>(".cal-day.selected");
+  if (strip && selected) {
+    const left = selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2;
+    strip.scrollLeft = Math.max(0, left);
+  }
+  if (strip) mountStripSwipe(strip, actions);
   mountFrontNewspaper(root, state, actions);
 }
