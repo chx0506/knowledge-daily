@@ -217,16 +217,22 @@ export async function buildProfile({ oauthToken = null, userRef = 'self', manual
     const recentFavs = unwrap(rRecent, []) ?? [];
     const ownContents = unwrap(rOwn, { items: [] }).items ?? [];
 
-    // 候选标签打分表：name -> { score, sources:Set, evidence:[] }
+    // 候选标签打分表：name -> { score, sources:Set, evidence:[], items:Set }
     const cand = new Map();
     const bump = (name, score, source, evidence) => {
       if (!name || name.length < 2) return;
       const key = name.trim();
-      if (!cand.has(key)) cand.set(key, { score: 0, sources: new Set(), evidence: [] });
+      if (!cand.has(key)) cand.set(key, { score: 0, sources: new Set(), evidence: [], items: new Set() });
       const c = cand.get(key);
       c.score += score;
       c.sources.add(source);
-      if (evidence && c.evidence.length < 3) c.evidence.push(evidence);
+      if (evidence) {
+        // 记录「不同条目」的身份（条目 URL，回退到 label），供语料支撑度判据使用。
+        // 注意 evidence 本身封顶 3 条，不能拿它当计数用。
+        const id = String(evidence.url || evidence.label || '');
+        if (id) c.items.add(id);
+        if (c.evidence.length < 3) c.evidence.push(evidence);
+      }
     };
 
     // 关注的人：签名语义
@@ -284,10 +290,26 @@ export async function buildProfile({ oauthToken = null, userRef = 'self', manual
       }
     }
 
+    // ---- 语料支撑度：真实兴趣会在多个条目里反复出现，切句碎片只来自单条 ----
+    // 实测（真实账号）：收藏「平心而论红楼梦是不是被严重高估了？」会切出「严重高估」，
+    // 它只由这 1 条支撑，却能通过下面的搜索核验蒙混过关——因为该短语在站内确实存在
+    // （搜到的还是足球新闻）。「是真实话题」不等于「是用户的兴趣」。
+    // 故要求：来自内容条目的标签至少被 2 个不同条目支撑；
+    // 用户主动给出 / 收藏夹名 / 正向反馈属高信任来源，不受此限。
+    const TRUSTED_SOURCES = new Set(['user_direction', 'favorite_list', 'feedback_positive']);
+    const wellSupported = ([, meta]) => meta.items.size >= 2
+      || [...meta.sources].some((s) => TRUSTED_SOURCES.has(s));
+    // 画像本身稀疏（条目太少）时不启用该判据，避免把仅有的标签也筛没
+    const sparseCorpus = recentFavs.length + ownContents.length + followees.length < 4;
+
     let candidates = [...cand.entries()]
       .filter(([name, meta]) => meta.score > 0 && !blocked.has(name))
-      .sort((a, b) => b[1].score - a[1].score)
-      .slice(0, 6);
+      .sort((a, b) => b[1].score - a[1].score);
+    if (!sparseCorpus) {
+      const supported = candidates.filter(wellSupported);
+      if (supported.length > 0) candidates = supported;
+    }
+    candidates = candidates.slice(0, 6);
 
     // ---- ③ 冷启动兜底 ----
     let coldStart = false;
