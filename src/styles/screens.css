@@ -1301,17 +1301,19 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 40px;
+  min-height: 48px;
+  justify-content: center;
 }
 
 /* 聊天消息：一条一条冒出来（无内框，文字直接落在气泡上） */
 .msg {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 14px;
   width: 100%;
-  font: 700 15px var(--serif);
+  padding: 4px 0;
+  font: 900 20px var(--serif);
   color: #16120f;
   animation: msg-in 0.24s ease both;
 }
@@ -1328,7 +1330,7 @@
 }
 
 .msg-check {
-  margin-left: 2px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--red);
 }
@@ -1341,8 +1343,8 @@
 }
 
 .typing i {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--red);
   animation: typing-blink 1s ease-in-out infinite;
