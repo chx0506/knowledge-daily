@@ -37,19 +37,25 @@ ghcr.io/chx0506/knowledge-daily:latest
 
 ---
 
-## 第 2 步 · 把镜像改成公开（关键，漏了 Sealos 拉不到）
+## 第 2 步 · 确认镜像可被公开拉取（本次已自动满足）
 
-ghcr 的 package **默认是私有**的，Sealos 无法拉取。
+ghcr 的 package 有私有风险（私有的话 Sealos 拉不到）。**本仓库实测已是公开可拉取**
+（匿名换取 token 后请求 manifest 返回 200），所以这一步通常**无需操作**。
+
+万一后续重建镜像后拉取失败，按下面检查：
 
 1. 打开 <https://github.com/chx0506?tab=packages>
 2. 点进 **knowledge-daily**
 3. 右侧 **Package settings** → 拉到底 **Danger Zone**
 4. **Change visibility** → 选 **Public** → 输入包名确认
 
-**预期**：package 页面顶部不再显示 "Private"。
-
-> 不想公开也行，但那样要在 Sealos 里填 GitHub 用户名 + Personal Access Token，
-> 麻烦且容易出错。黑客松期间公开镜像没问题。
+**快速自测**（应输出 `200`）：
+```bash
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:chx0506/knowledge-daily:pull&service=ghcr.io" | python3 -c "import json,sys;print(json.load(sys.stdin)['token'])")
+curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+  https://ghcr.io/v2/chx0506/knowledge-daily/manifests/latest
+```
 
 ---
 
