@@ -6,7 +6,25 @@
     <title>知乎趣报 · iPhone 17 Pro Max</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap" rel="stylesheet" />
+    <!--
+      字体改为**非渲染阻塞**加载。
+      原先的 <link rel="stylesheet"> 是渲染阻塞的：国内 fonts.googleapis.com 不可达时，
+      浏览器要一直等到超时才肯绘制首屏——这才是「登录后还是慢」的主因，与 JS 体积无关。
+      改成 media="print" + onload 切回 all 后，页面先用系统衬线体（Songti SC / STSong，
+      --serif 与 --poster 的兜底栈里都有）立即绘制，字体到了再换上，不再阻塞。
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Noto+Serif+SC:wght@600;700;900&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body>
     <main class="shell">

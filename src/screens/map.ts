@@ -10,9 +10,9 @@ import {
 } from "@/data/mock/map-people";
 import { escapeHtml, html } from "@/shared/html";
 import type { RuntimeState } from "@/app/store";
-import { LngLatBounds, Map as MapLibreMap, Marker } from "maplibre-gl";
-import type { StyleSpecification } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import type {
+  Map as MapLibreMap, Marker as MapLibreMarker, StyleSpecification,
+} from "maplibre-gl";
 
 const DEFAULT_STAMP = "photo";
 
@@ -56,7 +56,7 @@ const STREET_STYLE: StyleSpecification = {
 };
 
 let liveMap: MapLibreMap | null = null;
-let liveMarkers: Marker[] = [];
+let liveMarkers: MapLibreMarker[] = [];
 
 function iconSvg(name: string): string {
   const icons: Record<string, string> = {
@@ -346,7 +346,16 @@ function drawNetworkRoutes(map: MapLibreMap, svg: SVGSVGElement, networkId: stri
     .join("");
 }
 
-export function mountMap(root: HTMLElement, state: RuntimeState) {
+export async function mountMap(root: HTMLElement, state: RuntimeState) {
+  // 地图库按需加载：MapLibre 压前约 513KB，而地图只是一个 Tab，
+  // 首屏与其余分版完全用不到——放在这里动态引入后，首屏包从
+  // 1.2MB 削到约 690KB（brotli 后 339KB → 约 170KB）。
+  const [gl] = await Promise.all([
+    import("maplibre-gl"),
+    import("maplibre-gl/dist/maplibre-gl.css"),
+  ]);
+  const { Map: MapLibreMapCtor, Marker: MarkerCtor, LngLatBounds: LngLatBoundsCtor } = gl;
+
   const viewport = root.querySelector<HTMLElement>("[data-map-viewport]");
   const routes = root.querySelector<SVGSVGElement>("[data-map-routes]");
   const dossier = root.querySelector<HTMLElement>("[data-dossier]");
@@ -389,7 +398,7 @@ export function mountMap(root: HTMLElement, state: RuntimeState) {
         else openDossier(person.id);
       });
       liveMarkers.push(
-        new Marker({ element: el, anchor: "bottom" }).setLngLat([person.lng, person.lat]).addTo(map),
+        new MarkerCtor({ element: el, anchor: "bottom" }).setLngLat([person.lng, person.lat]).addTo(map),
       );
     });
   };
@@ -401,7 +410,7 @@ export function mountMap(root: HTMLElement, state: RuntimeState) {
       map.flyTo({ center: [people[0].lng, people[0].lat], zoom: 12, duration: 800 });
       return;
     }
-    const bounds = new LngLatBounds();
+    const bounds = new LngLatBoundsCtor();
     people.forEach((person) => bounds.extend([person.lng, person.lat]));
     map.resize();
     map.fitBounds(bounds, {
@@ -422,7 +431,7 @@ export function mountMap(root: HTMLElement, state: RuntimeState) {
     closeDossier();
   };
 
-  const map = new MapLibreMap({
+  const map = new MapLibreMapCtor({
     container: viewport,
     style: STREET_STYLE,
     center: [120.139, 30.2487],
