@@ -346,10 +346,17 @@ async function recallDomain(ctx, { profile, signalItems, oauthToken, warnings })
 
   // 每个领域按工作流 query 列表搜索（按 query 缓存），任务五成本模型：
   // standard 1 次；deep 追加第二角度（2 次，不变）；blind 也追加第二角度（1→2 次，
-  // 补足 recommend 移除后的召回池丰富度）——配额纪律不并发放大
+  // 补足 recommend 移除后的召回池丰富度）——配额纪律不并发放大。
+  //
+  // 例外：关联拓展补盲（profile_anchored）**不追加通用角度**。
+  // 锚定 query 召回的是「红楼梦 文创」，通用角度召回的是「光伏回本 / 投资测算」；
+  // 后者在质量分上占优，AI 就会照着它写——于是正文与 basis 声称的锚标签完全对不上
+  // （真实案例：basis 写「依据你的红楼梦兴趣」，正文却是光储充与碳资产）。
   const wf = DOMAIN_WORKFLOWS[def.workflow];
+  const anchoredBlind = ctx.tier === 'blind' && ctx.blindMode === 'profile_anchored';
   const queries = [query];
-  if ((ctx.tier === 'deep' || ctx.tier === 'blind') && wf?.queries?.[1] && wf.queries[1] !== query) {
+  if (!anchoredBlind && (ctx.tier === 'deep' || ctx.tier === 'blind')
+      && wf?.queries?.[1] && wf.queries[1] !== query) {
     queries.push(wf.queries[1]);
   }
   for (const q of [...new Set(queries)]) {
@@ -359,6 +366,19 @@ async function recallDomain(ctx, { profile, signalItems, oauthToken, warnings })
     } catch (err) {
       warnings.push(`recall.search(${def.id}): ${err.message}`);
     }
+  }
+
+  // 关联拓展补盲的第二道闸门：池子里必须真的留下了锚标签相关的内容。
+  // 否则宁可当天不生成——「声称按你的兴趣、内容却与它无关」比留白更伤信任，
+  // 也违背「有数据表示」这条底线。
+  if (anchoredBlind) {
+    const anchor = ctx.blindAnchor;
+    const related = raw.filter((s) => matchesAny(s.title, [anchor]));
+    if (related.length < 2) {
+      ctx.skipNote = `补盲未召回到与「${anchor}」相关的内容，今日未生成`;
+      return { raw: [], hotIssue, query };
+    }
+    return { raw: related, hotIssue, query };
   }
 
   return { raw, hotIssue, query };
@@ -483,8 +503,13 @@ export async function buildDomainReport(ctx, {
     domain_id: def.id,
     name: def.name,
     tier,
-    // 任务四：补盲领域标注召回模式（关联拓展 / 真冷启动），仅 tier=blind 时出现
-    ...(tier === 'blind' ? { blind_mode: ctx.blindMode ?? 'cold_start' } : {}),
+    // 任务四：补盲领域标注召回模式（关联拓展 / 真冷启动），仅 tier=blind 时出现；
+    // 关联拓展同时给出锚标签——basis 文案已引用它，结构化输出便于前端与排查对齐
+    ...(tier === 'blind' ? {
+      blind_mode: ctx.blindMode ?? 'cold_start',
+      ...(ctx.blindMode === 'profile_anchored' && ctx.blindAnchor
+        ? { blind_anchor: ctx.blindAnchor } : {}),
+    } : {}),
     basis: {
       text: buildBasisText(ctx, { total: scored.length, breakdown, hotIssue }),
       signals,
