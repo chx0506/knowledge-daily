@@ -53,6 +53,10 @@ export function createShell(root: {
         actions.skipOnboard();
         return;
       }
+      if (action === "skip-signin") {
+        actions.skipSignin();
+        return;
+      }
       if (action === "generate") {
         void actions.generate();
         return;

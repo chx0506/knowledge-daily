@@ -135,6 +135,11 @@ export function createActions(
       store.set({ route: "home" });
     },
 
+    /** 登录页在「后端暂不可达」分支下的兜底出口：先让人看到报纸。 */
+    skipSignin() {
+      store.set({ route: "home" });
+    },
+
     judgeInterest(cardId: string, verdict: InterestVerdict) {
       const { seenInterestCards, selectedTopics, profile } = store.get();
       if (seenInterestCards[cardId]) return;

@@ -14,6 +14,7 @@ import { mountHome, renderHome } from "@/screens/home";
 import { mountMap, renderMap } from "@/screens/map";
 import { renderOnboard } from "@/screens/onboard";
 import { renderProfile } from "@/screens/profile";
+import { renderSignin } from "@/screens/signin";
 import { tabIcons } from "@/shared/tab-icons";
 import type { RouteName, ScreenTheme } from "@/domain/types";
 import type { Actions } from "./actions";
@@ -33,6 +34,7 @@ export const screens: Record<RouteName, Screen> = {
   discover: { theme: "paper", render: renderDiscover, onMount: mountDiscover },
   mine: { theme: "paper", render: renderProfile },
   map: { theme: "paper", render: renderMap, onMount: mountMap },
+  signin: { theme: "dark", hideTabs: true, render: renderSignin },
   onboard: { theme: "dark", hideTabs: true, render: renderOnboard },
   loading: { theme: "dark", hideTabs: true, render: renderGenerating },
   result: { theme: "cover", hideTabs: true, render: renderCover },

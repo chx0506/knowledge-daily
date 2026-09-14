@@ -7,6 +7,7 @@ export type RouteName =
   | "discover"
   | "mine"
   | "map"
+  | "signin"
   | "onboard"
   | "loading"
   | "result"
