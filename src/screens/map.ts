@@ -1,9 +1,20 @@
 import { INTEREST_CARDS } from "@/data/mock/interest-cards";
-import { findMapPerson, MAP_PEOPLE, portraitForMe, type MapPerson } from "@/data/mock/map-people";
+import {
+  distanceKm,
+  findMapNetwork,
+  findMapPerson,
+  greatCircle,
+  peopleInNetwork,
+  portraitForMe,
+  type MapPerson,
+} from "@/data/mock/map-people";
 import { escapeHtml, html } from "@/shared/html";
 import type { RuntimeState } from "@/app/store";
+import { LngLatBounds, Map as MapLibreMap, Marker } from "maplibre-gl";
+import type { StyleSpecification } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 
-const PINS = MAP_PEOPLE;
+const DEFAULT_STAMP = "photo";
 
 const STAMPS = [
   { id: "photo", label: "摄影", src: "/map/stamps/stamp-photo.png" },
@@ -14,70 +25,222 @@ const STAMPS = [
   { id: "more", label: "收集更多兴趣", src: "/map/stamps/stamp-more.png" },
 ] as const;
 
-function routePath(): string {
-  const pts = PINS.map((pin) => `${pin.x},${pin.y}`);
-  return `M${pts[0]} C ${pts[1]} ${pts[2]} ${pts[3]} S ${pts[4]} ${pts[5]} S ${pts[6]} ${pts[7]}`;
+const AMAP_TILES = [1, 2, 3, 4].map(
+  (n) =>
+    `https://webrd0${n}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}`,
+);
+
+const STREET_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    world: {
+      type: "raster",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256,
+      attribution: "Esri, TomTom, FAO, NOAA, USGS",
+      maxzoom: 19,
+    },
+    streets: {
+      type: "raster",
+      tiles: AMAP_TILES,
+      tileSize: 256,
+      attribution: "© 高德地图",
+      minzoom: 3,
+      maxzoom: 18,
+    },
+  },
+  layers: [
+    { id: "world", type: "raster", source: "world" },
+    { id: "streets", type: "raster", source: "streets" },
+  ],
+};
+
+let liveMap: MapLibreMap | null = null;
+let liveMarkers: Marker[] = [];
+
+function iconSvg(name: string): string {
+  const icons: Record<string, string> = {
+    camera:
+      '<rect x="3" y="6" width="14" height="11" rx="2"/><circle cx="10" cy="11.5" r="3"/><path d="M7 6 8.2 3.8h3.6L13 6"/>',
+    mountain: '<path d="M2 16 7.5 6l3.2 5.6L13 8.2 18 16Z"/><path d="M9 16 12 11l3 5"/>',
+    coffee:
+      '<path d="M5 7h9v6.5A3.5 3.5 0 0 1 10.5 17H9A3.5 3.5 0 0 1 5 13.5Z"/><path d="M14 8.5h2.2A2.3 2.3 0 0 1 16 13h-2"/><path d="M7 19h6"/>',
+    music: '<path d="M8 15.5a2.5 2.5 0 1 1-1-.2V6.5l9-2v8.7a2.5 2.5 0 1 1-1-.2V6.2L8 8Z"/>',
+    book: '<path d="M4 5.5h5.2A3 3 0 0 1 12 7v10.2A3.4 3.4 0 0 0 9.2 16H4Z"/><path d="M16 5.5h-5.2A3 3 0 0 0 8 7v10.2A3.4 3.4 0 0 1 10.8 16H16Z"/>',
+    plane:
+      '<path d="M3 11.2 17.5 4.2l-2.8 12.2-3.4-3.6-2.6 4.8-.9-3.4L3 11.2Z"/>',
+    chart: '<path d="M3 16V8"/><path d="M8 16V5"/><path d="M13 16v-6"/><path d="M18 16V7"/>',
+    scale: '<path d="M10 3v14"/><path d="M6 17h8"/><path d="M10 6 4.5 12h5.2Z"/><path d="M10 6 15.5 12H10.3Z"/>',
+    wallet: '<rect x="3" y="6" width="14" height="10" rx="2"/><path d="M3 9h14"/><circle cx="14" cy="13" r="1"/>',
+    bike: '<circle cx="5.5" cy="14" r="3"/><circle cx="14.5" cy="14" r="3"/><path d="M5.5 14 9 7.5h3.5M9 14l3.2-6.5 3.3 6.5"/>',
+    game: '<rect x="2.5" y="6" width="15" height="9" rx="3"/><path d="M7 9v4M5 11h4"/><circle cx="13" cy="10" r=".8"/><circle cx="15" cy="12" r=".8"/>',
+    pen: '<path d="M12.5 3.8 16.2 7.5 8 15.7 4 16.8l1.1-4Z"/><path d="M11.2 5.1 14.9 8.8"/>',
+    flask: '<path d="M8 3h4M9 3v5.2L5.2 16.5A2.4 2.4 0 0 0 7.3 20h5.4a2.4 2.4 0 0 0 2.1-3.5L11 8.2V3"/>',
+    city: '<path d="M3 17V9l4-2 3 2v8M10 17V6l4-2 3 2v11M3 17h14"/>',
+    sleep: '<path d="M4 14.5A5 5 0 0 0 14.8 12 4.2 4.2 0 0 1 11 17.5H6.2A2.2 2.2 0 0 1 4 15.3Z"/>',
+    spark: '<path d="M10 3.5 11.4 8 16 9.2 11.4 10.5 10 15 8.6 10.5 4 9.2 8.6 8Z"/>',
+  };
+  const d = icons[name] ?? icons.spark;
+  return `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">${d}</svg>`;
 }
 
-function renderTags(items: string[]): string {
-  return items.map((item) => `<em>${escapeHtml(item)}</em>`).join("");
+function interestIcon(label: string): string {
+  if (/摄|相|取景/.test(label)) return iconSvg("camera");
+  if (/户|山|野|外/.test(label)) return iconSvg("mountain");
+  if (/咖|茶/.test(label)) return iconSvg("coffee");
+  if (/音|乐/.test(label)) return iconSvg("music");
+  if (/读|书|刊|论文/.test(label)) return iconSvg("book");
+  if (/旅|飞/.test(label)) return iconSvg("plane");
+  if (/财|报|股|宏观|利率/.test(label)) return iconSvg("chart");
+  if (/政策|对照/.test(label)) return iconSvg("scale");
+  if (/账|理财|家庭/.test(label)) return iconSvg("wallet");
+  if (/骑|车|通勤/.test(label)) return iconSvg("bike");
+  if (/游|版本|规则|玩家/.test(label)) return iconSvg("game");
+  if (/写|译|访|记/.test(label)) return iconSvg("pen");
+  if (/科|实验/.test(label)) return iconSvg("flask");
+  if (/城|店|招牌|街/.test(label)) return iconSvg("city");
+  if (/睡|作息/.test(label)) return iconSvg("sleep");
+  return iconSvg("spark");
+}
+
+function formatDistance(person: MapPerson): string {
+  if (person.kind === "me") return "就在这里";
+  const me = findMapPerson("me");
+  if (!me) return person.place;
+  const km = distanceKm(me, person);
+  if (km <= 0) return "就在这里";
+  return `距离你 ${km.toLocaleString("en-US")} 公里`;
+}
+
+function genderMark(gender: MapPerson["gender"]): string {
+  if (gender === "female") return '<i class="is-female">♀</i>';
+  if (gender === "male") return '<i class="is-male">♂</i>';
+  return "";
+}
+
+function seal(label: string, en: string): string {
+  const title = label.length > 2 ? `${label.slice(0, 2)}<br>${label.slice(2)}` : label;
+  return `<div class="map-postcard-seal"><b>${title}</b><small>${en}</small></div>`;
 }
 
 function renderDossier(person: MapPerson): string {
-  const mine = person.kind === "me";
   return html`
-    <header>
-      <figure>
-        <img src="${person.avatar}" alt="${escapeHtml(person.name)}" />
-      </figure>
-      <div>
-        <small>${mine ? "我的画像" : "人物画像"}</small>
-        <h2>${escapeHtml(person.name)}</h2>
-        <p>${escapeHtml(person.role)} · ${escapeHtml(person.city)}</p>
-        <span>@${escapeHtml(person.handle)}</span>
+    <button class="map-dossier-scrim" type="button" data-dossier-close aria-label="关闭画像"></button>
+    <div class="map-postcard-wrap">
+    <button class="map-postcard-x" type="button" data-dossier-close aria-label="关闭">×</button>
+    <article class="map-postcard">
+      <div class="map-postcard-airmail" aria-hidden="true"></div>
+      <div class="map-postcard-head">
+        <div class="map-postcard-marks" aria-hidden="true">
+          <svg viewBox="0 0 86 118" fill="none">
+            <defs>
+              <filter id="postcard-ink" x="-18%" y="-18%" width="136%" height="136%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/>
+                <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+              </filter>
+            </defs>
+            <g filter="url(#postcard-ink)" stroke="currentColor" fill="none">
+              <g transform="translate(42 36) rotate(-16)">
+                <ellipse rx="36" ry="23" stroke-width="1.65"/>
+                <text fill="currentColor" stroke="none" text-anchor="middle" font-family="'Arial Narrow', 'Helvetica Neue', sans-serif" font-weight="800">
+                  <tspan x="0" y="-9" font-size="7.6" letter-spacing="1.5">GOOD</tspan>
+                  <tspan x="0" y="-1.4" font-size="7.2" letter-spacing="0.45">PEOPLE</tspan>
+                  <tspan x="0" y="5.8" font-size="6.1" letter-spacing="0.12">BRIGHTER</tspan>
+                  <tspan x="0" y="13" font-size="7.4" letter-spacing="0.85">WORLD</tspan>
+                </text>
+              </g>
+              <g stroke-width="1.25" stroke-linecap="round">
+                <path d="M10 58c14-2 28 3 68 0"/>
+                <path d="M14 63c13-2 26 4 62 1"/>
+                <path d="M20 68c12-1 24 4 54 0"/>
+              </g>
+              <g transform="translate(34 92) rotate(-7)">
+                <circle r="20" stroke-width="2.05"/>
+                <circle r="15.6" stroke-width="1"/>
+                <g fill="currentColor" stroke="none">
+                  <path d="M0-10.2c1.15 0 1.7 2.8 1.7 6.8v6.2c0 2.1-.7 4.4-1.7 5.6-1-1.2-1.7-3.5-1.7-5.6V-3.4C-1.7-7.4-1.15-10.2 0-10.2Z"/>
+                  <path d="M-12.8-.2-2-2.2v4.6L-13.6 3.6Z"/>
+                  <path d="M12.8-.2 2-2.2v4.6L13.6 3.6Z"/>
+                  <path d="M-4.2 6.6 0 5.4 4.2 6.6 0 9.5Z"/>
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <figure class="map-postcard-stamp">
+          <span>
+            <img src="${person.stamp}" alt="${escapeHtml(person.name)}" />
+          </span>
+        </figure>
+        <div class="map-postcard-meta">
+          <b>${escapeHtml(person.serial)}</b>
+          <small>${escapeHtml(person.tagline)}</small>
+          <i></i>
+          <em>Collect<br />People<br />Not Just<br />Places.</em>
+        </div>
       </div>
-      <button type="button" data-dossier-close aria-label="关闭画像">×</button>
-    </header>
-    <dl>
-      <div>
-        <dt>兴趣</dt>
-        <dd>${renderTags(person.interests)}</dd>
+      <h2>${escapeHtml(person.name)}${genderMark(person.gender)}</h2>
+      <p class="map-postcard-bio">${escapeHtml(person.bio)}</p>
+      <div class="map-postcard-where">
+        <span>
+          <svg viewBox="0 0 16 16"><path d="M8 1.6A4.7 4.7 0 0 0 3.3 6.3C3.3 9.8 8 14.4 8 14.4s4.7-4.6 4.7-8.1A4.7 4.7 0 0 0 8 1.6Z" fill="currentColor"/><circle cx="8" cy="6.2" r="1.6" fill="#fffdf8"/></svg>
+          ${escapeHtml(person.city)} · ${escapeHtml(person.country)}
+        </span>
+        <span>
+          <svg viewBox="0 0 16 16"><path d="M1.5 8.4 13.2 3.4 11 13.2 8.2 10.3 6.1 14l-.7-2.7Z" fill="currentColor"/></svg>
+          ${escapeHtml(formatDistance(person))}
+        </span>
       </div>
-      <div>
-        <dt>领域</dt>
-        <dd>${renderTags(person.domains)}</dd>
+      <div class="map-postcard-row">
+        ${seal("兴趣", "INTERESTS")}
+        <div class="map-postcard-chips is-icon">
+          ${person.interests
+            .map((item) => `<em>${interestIcon(item)}<b>${escapeHtml(item)}</b></em>`)
+            .join("")}
+        </div>
       </div>
-      <div>
-        <dt>关注话题</dt>
-        <dd>${renderTags(person.topics)}</dd>
+      <div class="map-postcard-row">
+        ${seal("领域", "FIELDS")}
+        <div class="map-postcard-chips is-field">
+          ${person.domains.map((item) => `<em>${escapeHtml(item)}</em>`).join("")}
+        </div>
       </div>
-      <div>
-        <dt>关注博主</dt>
-        <dd class="map-dossier-blogs">
+      <div class="map-postcard-row">
+        ${seal("关注话题", "TOPICS")}
+        <div class="map-postcard-chips is-topic">
+          ${person.topics.map((item) => `<em>#${escapeHtml(item)}</em>`).join("")}
+        </div>
+      </div>
+      <div class="map-postcard-row is-follows">
+        ${seal("关注博主", "FOLLOWS")}
+        <div class="map-postcard-follows">
           ${person.bloggers
             .map(
               (blogger) =>
-                `<span><i>${escapeHtml(blogger.name.slice(0, 1))}</i>${escapeHtml(blogger.name)}</span>`,
+                `<span><img src="${blogger.avatar}" alt=""><small>${escapeHtml(blogger.name)}</small></span>`,
             )
             .join("")}
-        </dd>
+        </div>
       </div>
-    </dl>
+      <footer class="map-postcard-foot">
+        <blockquote>有趣的人，<br />总会在某个地方相遇。</blockquote>
+        <button type="button">查看主页 →</button>
+      </footer>
+      <div class="map-postcard-ridge" aria-hidden="true">
+        <img src="/map/postcard/ridge.png" alt="" />
+      </div>
+    </article>
+    </div>
   `;
 }
 
 function renderPin(pin: MapPerson): string {
   const mine = pin.kind === "me";
   return html`
-    <button
-      class="map-pin${mine ? " is-me" : ""}"
-      type="button"
-      style="left:${pin.x}%;top:${pin.y}%"
-      data-pin="${pin.id}"
-    >
+    <button class="map-pin${mine ? " is-me" : ""}" type="button" data-pin="${pin.id}">
       <span class="map-pin-face"><img src="${pin.avatar}" alt="" /></span>
       <i class="map-pin-dot"></i>
-      <em>${escapeHtml(pin.name)}<small>${escapeHtml(pin.note)}</small></em>
+      <em>${escapeHtml(pin.name)}<small>${escapeHtml(pin.city)} · ${escapeHtml(pin.place)}</small></em>
     </button>
   `;
 }
@@ -90,15 +253,10 @@ export function renderMap(state: RuntimeState): string {
   return html`
     <div class="map-page">
       <section class="map-field">
-        <div class="map-viewport" data-map-viewport>
-          <div class="map-stage" data-map-stage>
-            <img class="map-world" src="/map/world.svg" alt="" draggable="false" />
-            <svg class="map-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <path d="${routePath()}" />
-            </svg>
-            <div class="map-pins">${PINS.map(renderPin).join("")}</div>
-          </div>
-        </div>
+        <div class="map-viewport" data-map-viewport></div>
+        <svg class="map-routes" data-map-routes aria-hidden="true"></svg>
+        <div class="map-scale" data-map-scale role="button" tabindex="0">国家</div>
+        <div class="map-network-tag" data-network-tag>摄影关系网</div>
         <img class="map-postmark" src="/map/postmark-explore.png" alt="" draggable="false" aria-hidden="true" />
         <div class="map-compass" aria-hidden="true">
           <i></i>
@@ -111,7 +269,6 @@ export function renderMap(state: RuntimeState): string {
           <span><i class="is-me"></i>我的位置</span>
           <span><i></i>有趣的人</span>
         </div>
-        <aside class="map-dossier" data-dossier></aside>
       </section>
 
       <section class="map-album">
@@ -127,7 +284,7 @@ export function renderMap(state: RuntimeState): string {
             const more = stamp.id === "more";
             return html`
               <button
-                class="postage${more ? " is-more" : ""}"
+                class="postage${more ? " is-more" : stamp.id === DEFAULT_STAMP ? " is-on" : ""}"
                 type="button"
                 ${more ? `data-go="discover"` : `data-stamp="${stamp.id}"`}
               >
@@ -137,224 +294,69 @@ export function renderMap(state: RuntimeState): string {
           }).join("")}
         </div>
       </section>
+      <aside class="map-dossier" data-dossier></aside>
     </div>
   `;
 }
 
-function mountMapCamera(
-  viewport: HTMLElement,
-  stage: HTMLElement,
-  onTap: (target: HTMLElement) => void,
-) {
-  const TAP_SLOP = 14;
-  let scale = 0.42;
-  let x = 0;
-  let y = 0;
-  const pointers = new Map<number, { x: number; y: number }>();
-  let lastGap = 0;
-  let dragging = false;
-  let captured = false;
-  let moved = 0;
-  let vx = 0;
-  let vy = 0;
-  let lastT = 0;
-  let lastX = 0;
-  let lastY = 0;
-  let lastTap = 0;
-  let inertia = 0;
-  let downTarget: HTMLElement | null = null;
+function zoomCaption(zoom: number): string {
+  if (zoom < 3.5) return "世界";
+  if (zoom < 5) return "国家";
+  if (zoom < 7) return "省份";
+  if (zoom < 10) return "城市";
+  if (zoom < 13) return "区县";
+  if (zoom < 16) return "街道";
+  return "建筑";
+}
 
-  const size = () => ({
-    vw: viewport.clientWidth,
-    vh: viewport.clientHeight,
-    sw: stage.offsetWidth,
-    sh: stage.offsetHeight,
+const ZOOM_STOPS = [2.4, 4.2, 6.2, 9.6, 12.4, 15.4, 17.2];
+
+function destroyLiveMap() {
+  liveMarkers.forEach((marker) => marker.remove());
+  liveMarkers = [];
+  liveMap?.remove();
+  liveMap = null;
+}
+
+function networkPairs(networkId: string) {
+  const people = peopleInNetwork(findMapNetwork(networkId));
+  const me = people.find((person) => person.kind === "me");
+  if (!me) return [];
+  return people
+    .filter((person) => person.id !== me.id)
+    .map((person): [MapPerson, MapPerson] => [me, person]);
+}
+
+function drawNetworkRoutes(map: MapLibreMap, svg: SVGSVGElement, networkId: string) {
+  const width = map.getContainer().clientWidth;
+  const height = map.getContainer().clientHeight;
+  if (!width || !height) return;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const paths = networkPairs(networkId).map(([from, to]) => {
+    const d = greatCircle(from, to)
+      .map(([lng, lat]) => {
+        const point = map.project([lng, lat]);
+        return `${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      })
+      .join(" L ");
+    return `M ${d}`;
   });
-
-  const clamp = () => {
-    const { vw, vh, sw, sh } = size();
-    const maxX = Math.max(0, (sw * scale - vw) / 2 + 48);
-    const maxY = Math.max(0, (sh * scale - vh) / 2 + 36);
-    x = Math.min(maxX, Math.max(-maxX, x));
-    y = Math.min(maxY, Math.max(-maxY, y));
-  };
-
-  const paint = () => {
-    clamp();
-    stage.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    stage.style.setProperty("--pin-scale", `${1 / scale}`);
-  };
-
-  const fitScale = () => {
-    const { vw, vh, sw, sh } = size();
-    if (!vw || !vh || !sw || !sh) return 0.42;
-    return Math.min(vw / sw, vh / sh) * 0.98;
-  };
-
-  const minZoom = () => fitScale() * 0.92;
-  const maxZoom = () => fitScale() * 6.2;
-
-  const centerStart = () => {
-    x = 0;
-    y = 0;
-    scale = fitScale() * 1.12;
-    paint();
-  };
-
-  const zoomAt = (clientX: number, clientY: number, next: number) => {
-    const rect = viewport.getBoundingClientRect();
-    const px = clientX - rect.left - viewport.clientWidth / 2;
-    const py = clientY - rect.top - viewport.clientHeight / 2;
-    const old = scale;
-    scale = Math.min(maxZoom(), Math.max(minZoom(), next));
-    const k = scale / old;
-    x = px - (px - x) * k;
-    y = py - (py - y) * k;
-    paint();
-  };
-
-  const gapOf = () => {
-    const pts = [...pointers.values()];
-    if (pts.length < 2) return 0;
-    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-  };
-
-  const midOf = () => {
-    const pts = [...pointers.values()];
-    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-  };
-
-  const stopInertia = () => {
-    if (inertia) cancelAnimationFrame(inertia);
-    inertia = 0;
-  };
-
-  const glide = () => {
-    vx *= 0.92;
-    vy *= 0.92;
-    if (Math.hypot(vx, vy) < 0.18) {
-      inertia = 0;
-      return;
-    }
-    x += vx;
-    y += vy;
-    paint();
-    inertia = requestAnimationFrame(glide);
-  };
-
-  const capture = (event: PointerEvent) => {
-    if (captured) return;
-    captured = true;
-    viewport.setPointerCapture(event.pointerId);
-    viewport.classList.add("is-grabbing");
-  };
-
-  viewport.addEventListener("pointerdown", (event) => {
-    stopInertia();
-    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    downTarget = event.target instanceof HTMLElement ? event.target : null;
-    dragging = pointers.size === 1;
-    captured = false;
-    moved = 0;
-    vx = 0;
-    vy = 0;
-    lastT = event.timeStamp;
-    lastX = event.clientX;
-    lastY = event.clientY;
-    if (pointers.size === 2) {
-      lastGap = gapOf();
-      dragging = false;
-      capture(event);
-    }
-  });
-
-  viewport.addEventListener("pointermove", (event) => {
-    if (!pointers.has(event.pointerId)) return;
-    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-    if (pointers.size === 2) {
-      const gap = gapOf();
-      if (lastGap > 0) {
-        const mid = midOf();
-        zoomAt(mid.x, mid.y, scale * (gap / lastGap));
-      }
-      lastGap = gap;
-      return;
-    }
-
-    if (!dragging) return;
-    const dx = event.clientX - lastX;
-    const dy = event.clientY - lastY;
-    moved += Math.hypot(dx, dy);
-    if (moved > TAP_SLOP) capture(event);
-    if (!captured) return;
-    x += dx;
-    y += dy;
-    const dt = Math.max(1, event.timeStamp - lastT);
-    vx = dx / dt * 16;
-    vy = dy / dt * 16;
-    lastT = event.timeStamp;
-    lastX = event.clientX;
-    lastY = event.clientY;
-    paint();
-  });
-
-  const endPointer = (event: PointerEvent) => {
-    pointers.delete(event.pointerId);
-    if (pointers.size === 1) {
-      const remain = [...pointers.values()][0];
-      lastX = remain.x;
-      lastY = remain.y;
-      dragging = true;
-      lastGap = 0;
-      return;
-    }
-    dragging = false;
-    lastGap = 0;
-    viewport.classList.remove("is-grabbing");
-    if (moved <= TAP_SLOP) {
-      const pin = downTarget?.closest<HTMLElement>("[data-pin]");
-      if (pin) {
-        onTap(pin);
-      } else {
-        const now = event.timeStamp;
-        if (now - lastTap < 280) zoomAt(event.clientX, event.clientY, scale > 1.4 ? fitScale() : Math.min(maxZoom(), scale * 1.85));
-        lastTap = now;
-        onTap(viewport);
-      }
-    } else if (Math.hypot(vx, vy) > 0.6) {
-      inertia = requestAnimationFrame(glide);
-    }
-    downTarget = null;
-  };
-
-  viewport.addEventListener("pointerup", endPointer);
-  viewport.addEventListener("pointercancel", endPointer);
-
-  viewport.addEventListener(
-    "wheel",
-    (event) => {
-      event.preventDefault();
-      const next = scale * (event.deltaY > 0 ? 0.9 : 1.11);
-      zoomAt(event.clientX, event.clientY, next);
-    },
-    { passive: false },
-  );
-
-  viewport.addEventListener("lostpointercapture", () => {
-    dragging = false;
-    captured = false;
-    viewport.classList.remove("is-grabbing");
-  });
-
-  centerStart();
+  svg.innerHTML = paths
+    .flatMap((d) => [`<path class="is-halo" d="${d}" />`, `<path class="is-line" d="${d}" />`])
+    .join("");
 }
 
 export function mountMap(root: HTMLElement, state: RuntimeState) {
   const viewport = root.querySelector<HTMLElement>("[data-map-viewport]");
-  const stage = root.querySelector<HTMLElement>("[data-map-stage]");
+  const routes = root.querySelector<SVGSVGElement>("[data-map-routes]");
   const dossier = root.querySelector<HTMLElement>("[data-dossier]");
+  const scaleEl = root.querySelector<HTMLElement>("[data-map-scale]");
+  const tagEl = root.querySelector<HTMLElement>("[data-network-tag]");
   let openId = "";
+  let activeStamp = DEFAULT_STAMP;
+
+  destroyLiveMap();
+  if (!viewport) return;
 
   const closeDossier = () => {
     openId = "";
@@ -374,26 +376,124 @@ export function mountMap(root: HTMLElement, state: RuntimeState) {
     dossier.classList.add("is-open");
   };
 
-  if (viewport && stage) {
-    mountMapCamera(viewport, stage, (target) => {
-      const pin = target.closest<HTMLElement>("[data-pin]");
-      const id = pin?.dataset.pin;
-      if (id) {
-        if (openId === id) closeDossier();
-        else openDossier(id);
-        return;
-      }
-      closeDossier();
+  const paintPins = (map: MapLibreMap, stampId: string) => {
+    liveMarkers.forEach((marker) => marker.remove());
+    liveMarkers = [];
+    peopleInNetwork(findMapNetwork(stampId)).forEach((person) => {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = renderPin(person).trim();
+      const el = wrap.firstElementChild as HTMLElement;
+      el.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (openId === person.id) closeDossier();
+        else openDossier(person.id);
+      });
+      liveMarkers.push(
+        new Marker({ element: el, anchor: "bottom" }).setLngLat([person.lng, person.lat]).addTo(map),
+      );
     });
-  }
+  };
+
+  const fitNetwork = (map: MapLibreMap, stampId: string) => {
+    const people = peopleInNetwork(findMapNetwork(stampId));
+    if (!people.length) return;
+    if (people.length === 1) {
+      map.flyTo({ center: [people[0].lng, people[0].lat], zoom: 12, duration: 800 });
+      return;
+    }
+    const bounds = new LngLatBounds();
+    people.forEach((person) => bounds.extend([person.lng, person.lat]));
+    map.resize();
+    map.fitBounds(bounds, {
+      padding: { top: 72, left: 36, right: 36, bottom: 28 },
+      maxZoom: 12,
+      duration: 900,
+      essential: true,
+    });
+  };
+
+  const applyNetwork = (map: MapLibreMap, stampId: string) => {
+    activeStamp = stampId;
+    const network = findMapNetwork(stampId);
+    if (tagEl) tagEl.textContent = `${network.label}关系网`;
+    paintPins(map, stampId);
+    fitNetwork(map, stampId);
+    if (routes) drawNetworkRoutes(map, routes, stampId);
+    closeDossier();
+  };
+
+  const map = new MapLibreMap({
+    container: viewport,
+    style: STREET_STYLE,
+    center: [120.139, 30.2487],
+    zoom: 4.2,
+    minZoom: 2,
+    maxZoom: 18,
+    fadeDuration: 0,
+    dragRotate: false,
+    pitchWithRotate: false,
+    attributionControl: { compact: true },
+  });
+  liveMap = map;
+
+  const restoreOverlay = (fly: boolean) => {
+    if (!map.getStyle()) return;
+    paintPins(map, activeStamp);
+    if (routes) drawNetworkRoutes(map, routes, activeStamp);
+    if (fly) fitNetwork(map, activeStamp);
+    map.resize();
+    syncScale();
+  };
+
+  const syncScale = () => {
+    if (scaleEl) scaleEl.textContent = zoomCaption(map.getZoom());
+  };
+
+  map.on("style.load", () => restoreOverlay(true));
+  map.on("move", () => {
+    if (routes) drawNetworkRoutes(map, routes, activeStamp);
+  });
+
+  map.on("zoom", syncScale);
+  map.on("click", (event) => {
+    const target = event.originalEvent.target;
+    if (target instanceof Element && target.closest("[data-pin]")) return;
+    closeDossier();
+  });
+
+  const stepZoom = () => {
+    const current = map.getZoom();
+    const next = ZOOM_STOPS.find((stop) => stop > current + 0.35) ?? ZOOM_STOPS[0];
+    const people = peopleInNetwork(findMapNetwork(activeStamp));
+    const focus = people.find((person) => person.kind === "me") ?? people[0];
+    map.easeTo({
+      zoom: next,
+      duration: 650,
+      essential: true,
+      ...(next >= 9.5 && focus ? { center: [focus.lng, focus.lat] } : {}),
+    });
+  };
+  scaleEl?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    stepZoom();
+  });
+
+  requestAnimationFrame(() => map.resize());
+  window.setTimeout(() => map.resize(), 280);
 
   dossier?.addEventListener("click", (event) => {
-    if ((event.target as HTMLElement).closest("[data-dossier-close]")) closeDossier();
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-dossier-close]")) closeDossier();
   });
 
   root.querySelectorAll<HTMLElement>("[data-stamp]").forEach((stamp) => {
     stamp.addEventListener("click", () => {
-      stamp.classList.toggle("is-on");
+      const id = stamp.dataset.stamp;
+      if (!id) return;
+      root.querySelectorAll<HTMLElement>("[data-stamp]").forEach((item) => {
+        item.classList.toggle("is-on", item === stamp);
+      });
+      applyNetwork(map, id);
     });
   });
 }

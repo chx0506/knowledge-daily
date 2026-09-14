@@ -11,5 +11,8 @@
   "devDependencies": {
     "typescript": "^5.9.2",
     "vite": "^7.1.5"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.9.0"
   }
 }

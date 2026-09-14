@@ -21,12 +21,28 @@ function mondayIndex(date: string): number {
   return day === 0 ? 6 : day - 1;
 }
 
-function weeksOfMonth(year: number, month: number): Array<Array<string | null>> {
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const date = new Date(year, month - 1 + delta, 1);
+  return { year: date.getFullYear(), month: date.getMonth() + 1 };
+}
+
+function weeksOfMonth(year: number, month: number): Array<Array<{ date: string; outside: boolean }>> {
   const dates = datesInMonth(year, month);
   const pad = mondayIndex(dates[0]);
-  const cells: Array<string | null> = [...Array(pad).fill(null), ...dates];
-  while (cells.length % 7 !== 0) cells.push(null);
-  const weeks: Array<Array<string | null>> = [];
+  const prev = shiftMonth(year, month, -1);
+  const next = shiftMonth(year, month, 1);
+  const prevDates = datesInMonth(prev.year, prev.month);
+  const nextDates = datesInMonth(next.year, next.month);
+  const cells: Array<{ date: string; outside: boolean }> = [
+    ...prevDates.slice(prevDates.length - pad).map((date) => ({ date, outside: true })),
+    ...dates.map((date) => ({ date, outside: false })),
+  ];
+  let extra = 0;
+  while (cells.length % 7 !== 0) {
+    cells.push({ date: nextDates[extra], outside: true });
+    extra += 1;
+  }
+  const weeks: Array<Array<{ date: string; outside: boolean }>> = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   return weeks;
 }
@@ -55,13 +71,13 @@ export function renderCalendar(state: RuntimeState): string {
         ${weeksOfMonth(year, month)
           .map((week) => {
             const buttons = week
-              .map((date) => {
-                if (!date) return `<span class="cal-cell"><span class="cal-day empty"></span></span>`;
-                const day = Number(date.slice(8));
-                const selectedClass = date === selected ? " selected" : "";
-                const hasClass = paperDates.has(date) ? " has" : "";
-                const todayClass = date === TODAY ? " today" : "";
-                return `<span class="cal-cell"><button class="cal-day${selectedClass}${hasClass}${todayClass}" type="button" data-action="select-date" data-date="${date}">${day}</button></span>`;
+              .map((cell) => {
+                const day = Number(cell.date.slice(8));
+                const selectedClass = cell.date === selected ? " selected" : "";
+                const hasClass = paperDates.has(cell.date) ? " has" : "";
+                const todayClass = cell.date === TODAY ? " today" : "";
+                const outsideClass = cell.outside ? " outside" : "";
+                return `<span class="cal-cell"><button class="cal-day${selectedClass}${hasClass}${todayClass}${outsideClass}" type="button" data-action="select-date" data-date="${cell.date}">${day}</button></span>`;
               })
               .join("");
             return `<div class="cal-week">${buttons}</div>`;
@@ -86,10 +102,71 @@ export function renderCalendar(state: RuntimeState): string {
   `;
 }
 
+function mountStripSwipe(strip: HTMLElement) {
+  const SLOP = 8;
+  let pointer = 0;
+  let startX = 0;
+  let startScroll = 0;
+  let moved = 0;
+  let dragging = false;
+
+  const weekWidth = () => strip.clientWidth || 1;
+
+  const snap = () => {
+    const width = weekWidth();
+    const max = Math.max(0, strip.scrollWidth - width);
+    const index = Math.round(strip.scrollLeft / width);
+    const left = Math.min(max, Math.max(0, index * width));
+    strip.scrollTo({ left, behavior: "smooth" });
+  };
+
+  strip.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pointer = event.pointerId;
+    startX = event.clientX;
+    startScroll = strip.scrollLeft;
+    moved = 0;
+    dragging = true;
+    strip.setPointerCapture(event.pointerId);
+    strip.classList.add("is-dragging");
+  });
+
+  strip.addEventListener("pointermove", (event) => {
+    if (!dragging || event.pointerId !== pointer) return;
+    const dx = event.clientX - startX;
+    moved = Math.max(moved, Math.abs(dx));
+    if (moved < SLOP) return;
+    event.preventDefault();
+    strip.scrollLeft = startScroll - dx;
+  });
+
+  const endPointer = (event: PointerEvent) => {
+    if (!dragging || event.pointerId !== pointer) return;
+    dragging = false;
+    strip.classList.remove("is-dragging");
+    if (moved >= SLOP) snap();
+    if (strip.hasPointerCapture(event.pointerId)) strip.releasePointerCapture(event.pointerId);
+  };
+
+  strip.addEventListener("pointerup", endPointer);
+  strip.addEventListener("pointercancel", endPointer);
+
+  strip.addEventListener(
+    "click",
+    (event) => {
+      if (moved < SLOP) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+}
+
 export function mountCalendar(root: HTMLElement, state: RuntimeState, actions: Actions): void {
   const selected = root.querySelector<HTMLElement>(".cal-day.selected");
   const strip = root.querySelector<HTMLElement>("#cal-strip");
   const week = selected?.closest<HTMLElement>(".cal-week");
   if (week && strip) strip.scrollLeft = week.offsetLeft;
+  if (strip) mountStripSwipe(strip);
   mountFrontNewspaper(root, state, actions);
 }

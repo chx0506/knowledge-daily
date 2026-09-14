@@ -324,6 +324,8 @@
 .cal-strip {
   display: flex;
   flex-flow: row nowrap;
+  width: 100%;
+  min-width: 0;
   height: 44px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -331,13 +333,24 @@
   border-bottom: 1px solid #ece6dc;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  user-select: none;
 }
 
 .cal-strip::-webkit-scrollbar {
   display: none;
 }
 
+.cal-strip.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
 .cal-week {
+  box-sizing: border-box;
   flex: 0 0 100%;
   width: 100%;
   min-width: 100%;
@@ -345,6 +358,7 @@
   height: 36px;
   padding: 0 8px;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .cal-cell {
@@ -376,6 +390,10 @@
 
 .cal-day.empty {
   visibility: hidden;
+}
+
+.cal-day.outside {
+  color: #b3ada4;
 }
 
 .cal-day.has {
@@ -2260,6 +2278,7 @@
 /* ---------- 看山地图 / 新版头版（origin/main） ---------- */
 
 .map-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -2283,6 +2302,69 @@
   overscroll-behavior: none;
   cursor: grab;
   user-select: none;
+  background: #efe4cf;
+}
+
+.map-viewport .maplibregl-map {
+  position: absolute;
+  inset: 0;
+}
+
+.map-viewport .maplibregl-canvas {
+  filter: none;
+}
+
+.map-viewport .maplibregl-ctrl-bottom-left {
+  display: none;
+}
+
+.map-viewport .maplibregl-ctrl-bottom-right {
+  right: 6px;
+  bottom: 2px;
+}
+
+.map-viewport .maplibregl-ctrl-attrib {
+  margin: 0;
+  padding: 1px 5px;
+  background: #fffdf8cc;
+  color: #6d6256;
+  font-size: 8px;
+}
+
+.maplibregl-marker {
+  z-index: 4;
+}
+
+.maplibregl-marker .map-pin {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+}
+
+.map-scale,
+.map-network-tag {
+  position: absolute;
+  z-index: 6;
+  padding: 4px 8px;
+  border: 1px solid #1b171355;
+  background: #fffdf8ee;
+  color: #5c564d;
+  font: 700 10px/1 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.map-scale {
+  top: 10px;
+  left: 12px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.map-network-tag {
+  top: 36px;
+  left: 12px;
+  pointer-events: none;
 }
 
 .map-viewport.is-grabbing {
@@ -2312,17 +2394,37 @@
 .map-routes {
   position: absolute;
   inset: 0;
+  z-index: 3;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .map-routes path {
   fill: none;
-  stroke: var(--red);
-  stroke-width: 0.18;
-  stroke-dasharray: 1.2 1.1;
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.map-routes .is-halo {
+  stroke: #fffdf8;
+  stroke-width: 5;
+  stroke-opacity: 0.88;
+}
+
+.map-routes .is-line {
+  stroke: var(--red);
+  stroke-width: 2.2;
+  stroke-dasharray: 7 6;
+  stroke-opacity: 0.94;
+  animation: map-route-flow 22s linear infinite;
+}
+
+@keyframes map-route-flow {
+  to {
+    stroke-dashoffset: -130;
+  }
 }
 
 .map-pins {
@@ -2537,151 +2639,437 @@
   background: #3a7bd5;
 }
 
-.map-field:has(.map-dossier.is-open) .map-legend,
-.map-field:has(.map-dossier.is-open) .map-compass {
+.map-page:has(.map-dossier.is-open) .map-legend,
+.map-page:has(.map-dossier.is-open) .map-compass {
   opacity: 0;
 }
 
 .map-dossier {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 8;
+  inset: 0;
+  z-index: 12;
   display: none;
-  max-height: calc(100% - 18px);
-  overflow: auto;
-  padding: 10px 12px 12px;
-  border: 1.5px solid var(--ink);
-  background: #fffdf8;
-  box-shadow: 0 12px 28px #00000024;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px 8px;
+  pointer-events: none;
 }
 
 .map-dossier.is-open {
-  display: block;
+  display: flex;
+  pointer-events: auto;
 }
 
-.map-dossier header {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 28px;
-  gap: 10px;
-  align-items: start;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ink);
+.map-dossier-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: #1a120c55;
+  cursor: pointer;
 }
 
-.map-dossier figure {
-  width: 52px;
-  height: 52px;
-  margin: 0;
-  overflow: hidden;
-  border: 1.5px solid var(--ink);
-  border-radius: 50%;
-  background: #f3ead8;
-}
-
-.map-dossier figure img {
-  display: block;
+.map-postcard-wrap {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-width: 328px;
+  max-height: calc(100% - 4px);
+  padding: 8px 8px 0 0;
+  filter: drop-shadow(0 16px 28px #00000040);
 }
 
-.map-dossier header small {
-  color: var(--red);
-  font: 700 10px/1 var(--mono);
-  letter-spacing: 0.14em;
-}
-
-.map-dossier h2 {
-  margin: 3px 0 2px;
-  color: var(--red);
-  font: 900 22px/0.95 var(--poster);
-  letter-spacing: -0.04em;
-}
-
-.map-dossier header p {
-  margin: 0 0 2px;
-  color: #5c564d;
-  font-size: 12px;
-}
-
-.map-dossier header span {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.map-dossier header button {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--ink);
-  background: #fffdf8;
+.map-postcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: inherit;
+  overflow: auto;
+  padding: 0 12px 0;
   color: var(--ink);
-  font-size: 20px;
+  background:
+    linear-gradient(180deg, #fffaf2 0%, #f7f0e4 48%, #f3ead8 100%);
+  clip-path: polygon(
+    0.8% 0.4%, 3% 0, 7% 0.6%, 12% 0, 18% 0.5%, 24% 0, 31% 0.6%, 38% 0, 46% 0.4%,
+    54% 0, 62% 0.5%, 70% 0, 78% 0.4%, 86% 0, 93% 0.6%, 97% 0.2%, 100% 1.2%,
+    99.6% 6%, 100% 12%, 99.5% 20%, 100% 28%, 99.4% 38%, 100% 48%, 99.5% 58%,
+    100% 68%, 99.4% 78%, 100% 88%, 99.2% 96%, 98.6% 100%,
+    93% 99.4%, 86% 100%, 78% 99.5%, 70% 100%, 62% 99.4%, 54% 100%, 46% 99.5%,
+    38% 100%, 30% 99.4%, 22% 100%, 14% 99.5%, 7% 100%, 1.4% 99%, 0 97%,
+    0.6% 90%, 0 82%, 0.5% 72%, 0 62%, 0.6% 52%, 0 42%, 0.5% 32%, 0 22%,
+    0.6% 12%, 0 5%, 0.4% 1.5%
+  );
+  scrollbar-width: none;
+}
+
+.map-postcard::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    url("/home/paper-grain.jpg") center / 220px auto repeat;
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  content: "";
+}
+
+.map-postcard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.map-postcard-x {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid #d3cbc0;
+  border-radius: 50%;
+  background: #fffdf8;
+  color: #6b645b;
+  box-shadow: 0 2px 8px #00000022;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
 
-.map-dossier dl {
+.map-postcard-airmail {
+  height: 10px;
+  margin: 0 -12px 10px;
+  background: repeating-linear-gradient(
+    -48deg,
+    #c4161c 0 6px,
+    #fffdf8 6px 12px,
+    #1a3d86 12px 18px,
+    #fffdf8 18px 24px
+  );
+}
+
+.map-postcard-head {
   display: grid;
-  gap: 8px;
-  margin: 0;
+  grid-template-columns: 72px minmax(0, 1fr) 92px;
+  gap: 2px 4px;
+  align-items: start;
 }
 
-.map-dossier dt {
-  margin-bottom: 5px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
+.map-postcard-marks {
+  position: relative;
+  z-index: 1;
+  height: 136px;
+  overflow: visible;
+  color: #c4161c;
+  pointer-events: none;
+}
+
+.map-postcard-marks svg {
+  position: absolute;
+  left: -2px;
+  top: 8px;
+  width: 82px;
+  height: 112px;
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+.map-postcard-stamp {
+  --tooth: 7px;
+  position: relative;
+  z-index: 2;
+  width: 132px;
+  max-width: 100%;
+  margin: 2px auto 0;
+  padding: 8px 7px;
+  background:
+    radial-gradient(circle at 0 50%, transparent 5px, #f6efe3 5.5px) 0 / var(--tooth) 100% repeat-y,
+    radial-gradient(circle at 100% 50%, transparent 5px, #f6efe3 5.5px) 100% / var(--tooth) 100% repeat-y,
+    radial-gradient(circle at 50% 0, transparent 5px, #f6efe3 5.5px) 0 0 / 100% var(--tooth) repeat-x,
+    radial-gradient(circle at 50% 100%, transparent 5px, #f6efe3 5.5px) 0 100% / 100% var(--tooth) repeat-x;
+  background-color: #f6efe3;
+  box-shadow: 0 4px 10px #00000018;
+  transform: rotate(-0.6deg);
+}
+
+.map-postcard-stamp span {
+  display: block;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border: 1px solid #cbb79a;
+  background: #d7c7ae;
+  box-shadow: inset 0 0 0 3px #f6efe3, inset 0 0 0 4px #d8c7ab;
+}
+
+.map-postcard-stamp img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+}
+
+.map-postcard-meta {
+  padding: 2px 2px 0 0;
+  text-align: right;
+}
+
+.map-postcard-meta b {
+  display: block;
+  color: #5e574e;
+  font: 700 11px/1 var(--mono);
   letter-spacing: 0.12em;
+  white-space: nowrap;
 }
 
-.map-dossier dd {
+.map-postcard-meta small {
+  display: block;
+  margin-top: 8px;
+  color: #6a635a;
+  font-size: 10px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+.map-postcard-meta i {
+  display: block;
+  width: 22px;
+  height: 1.5px;
+  margin: 10px 1px 10px auto;
+  background: #2c2823;
+}
+
+.map-postcard-meta em {
+  display: block;
+  color: #2a5f9c;
+  font: 700 15px/1.18 "Caveat", "Segoe Script", cursive;
+  letter-spacing: 0.01em;
+  text-align: right;
+  transform: rotate(-6deg);
+  transform-origin: right top;
+}
+
+.map-postcard h2 {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-}
-
-.map-dossier dd em {
-  padding: 3px 7px;
-  border: 1px solid var(--ink);
-  background: #f7f1e6;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
-}
-
-.map-dossier-blogs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.map-dossier-blogs span {
-  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px 2px 3px;
-  border: 1px solid var(--ink);
-  background: #f7f1e6;
-  font-size: 11px;
-  font-weight: 700;
+  justify-content: center;
+  gap: 7px;
+  margin: 12px 0 0;
+  color: #1c1814;
+  font: 900 28px/1 var(--poster);
+  letter-spacing: 0.06em;
 }
 
-.map-dossier-blogs i {
+.map-postcard h2 i {
   display: grid;
   place-items: center;
   width: 18px;
   height: 18px;
+  border: 0;
   border-radius: 50%;
-  background: var(--navy);
   color: #fffdf8;
-  font-size: 10px;
+  font: 700 11px/1 var(--sans);
+  font-style: normal;
+}
+
+.map-postcard h2 i.is-female {
+  background: #e45c55;
+}
+
+.map-postcard h2 i.is-male {
+  background: #c4161c;
+}
+
+.map-postcard-bio {
+  margin: 8px 0 0;
+  color: #5f5850;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.map-postcard-where {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+  color: #4a4540;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.map-postcard-where span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-postcard-where span + span {
+  padding-left: 10px;
+  border-left: 1px solid #d8cfc2;
+}
+
+.map-postcard-where svg {
+  width: 12px;
+  height: 12px;
+  color: #c4161c;
+}
+
+.map-postcard-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.map-postcard-seal {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+  padding: 5px 2px 4px;
+  border-radius: 3px;
+  background: #c4161c;
+  color: #fffdf8;
+  box-shadow: 1px 1px 0 #8a1014;
+  text-align: center;
+}
+
+.map-postcard-seal b {
+  font: 900 11px/1.15 var(--poster);
+  letter-spacing: 0.04em;
+}
+
+.map-postcard-seal small {
+  margin-top: 2px;
+  font: 700 7px/1 var(--mono);
+  letter-spacing: 0.12em;
+  opacity: 0.82;
+}
+
+.map-postcard-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.map-postcard-chips.is-icon {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-postcard-chips em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #efe6d6;
+  color: #2c2823;
+  font-size: 11px;
   font-style: normal;
   font-weight: 700;
+}
+
+.map-postcard-chips.is-icon em {
+  min-width: 0;
+  padding: 4px 5px;
+}
+
+.map-postcard-chips.is-icon b {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.map-postcard-chips svg {
+  width: 12px;
+  height: 12px;
+  color: #3a342c;
+}
+
+.map-postcard-chips.is-field em,
+.map-postcard-chips.is-topic em {
+  background: #f7f1e6;
+  box-shadow: inset 0 0 0 1px #e4d9c6;
+}
+
+.map-postcard-follows {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.map-postcard-follows span {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.map-postcard-follows img {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border: 1.5px solid #efe6d6;
+  border-radius: 50%;
+  background: #f3ead8;
+  box-shadow: 0 1px 0 #00000014;
+}
+
+.map-postcard-follows small {
+  max-width: 100%;
+  color: #5c564d;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+}
+
+.map-postcard-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 4px;
+}
+
+.map-postcard-foot blockquote {
+  margin: 0;
+  color: #2b5f9a;
+  font: italic 600 12px/1.45 "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", serif;
+}
+
+.map-postcard-foot button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: #c4161c;
+  color: #fffdf8;
+  box-shadow: 1px 1px 0 #8a1014;
+  font: 800 12px/1 var(--sans);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-postcard-ridge {
+  height: 56px;
+  margin: 2px -12px 0;
+  overflow: hidden;
+}
+
+.map-postcard-ridge img {
+  display: block;
+  width: 100%;
+  height: 120%;
+  object-fit: cover;
+  object-position: 50% 86%;
 }
 
 .map-album {
