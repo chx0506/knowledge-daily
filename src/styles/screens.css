@@ -1272,11 +1272,11 @@
   object-fit: cover;
 }
 
-/* 看山对话框：进程在气泡里进行 */
+/* 看山对话框：进程在气泡里进行（气泡在上，尾巴朝下指向看山） */
 .bubble {
   position: relative;
-  margin-top: 18px;
-  padding: 16px 16px 6px;
+  margin-top: 16px;
+  padding: 16px 16px 12px;
   border-radius: 20px;
   background: #f1e8d8;
   color: #16120f;
@@ -1285,12 +1285,12 @@
 
 .bubble-tail {
   position: absolute;
-  top: -7px;
-  left: 42px;
+  bottom: -7px;
+  left: 50%;
   width: 16px;
   height: 16px;
   background: #f1e8d8;
-  transform: rotate(45deg);
+  transform: translateX(-50%) rotate(45deg);
 }
 
 .bubble h1 {
@@ -1307,7 +1307,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 10px;
+  min-height: 40px;
 }
 
 /* 聊天消息：一条一条冒出来 */
