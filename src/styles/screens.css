@@ -2049,6 +2049,26 @@
   text-decoration-thickness: 1px;
 }
 
+/* 补盲领域 Tab 的「拓展」小标记：沿用报纸灰调，收敛不抢眼。 */
+.home-tab-ext {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 3px;
+  border: 1px solid #c9c0b2;
+  border-radius: 2px;
+  color: #a39a8b;
+  font-size: 9px;
+  line-height: 1.5;
+  vertical-align: 1px;
+  letter-spacing: 0.05em;
+}
+
+.home-tab.is-active .home-tab-ext {
+  border-color: currentColor;
+  color: inherit;
+  opacity: 0.75;
+}
+
 .domain-skipped {
   padding: 48px 20px;
   text-align: center;

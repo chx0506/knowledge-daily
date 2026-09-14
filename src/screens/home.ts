@@ -1,4 +1,4 @@
-import { HOME_TABS, domainMeta, findDomainBlock } from "@/domain/catalog";
+import { domainMeta, findDomainBlock, homeTabs } from "@/domain/catalog";
 import type { DailyPaper, DomainId, RouteName } from "@/domain/types";
 import { padIssue } from "@/shared/format";
 import { escapeHtml, html } from "@/shared/html";
@@ -174,7 +174,9 @@ function renderNotice(paper: DailyPaper): string {
 }
 
 export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, from: RouteName): string {
-  const homeTab = HOME_TABS.includes(state.homeTab) ? state.homeTab : "recommend";
+  const tabs = homeTabs(paper);
+  const tierOf = new Map(paper.domains.map((block) => [block.domainId, block.lead.tier]));
+  const homeTab = tabs.includes(state.homeTab) ? state.homeTab : "recommend";
   return html`
     <header class="front-mast">
       ${renderNameplate("mast")}
@@ -189,15 +191,16 @@ export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, fro
     ${renderNotice(paper)}
 
     <nav class="home-tabs" data-home-tabs>
-      ${HOME_TABS.map((id) => {
+      ${tabs.map((id) => {
         const meta = domainMeta(id);
         const skipped = id !== "recommend" && !paper.domains.some((block) => block.domainId === id);
-        return `<button class="home-tab${homeTab === id ? " is-active" : ""}${skipped ? " is-skipped" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}</button>`;
+        const extend = !skipped && tierOf.get(id) === "blind";
+        return `<button class="home-tab${homeTab === id ? " is-active" : ""}${skipped ? " is-skipped" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}${extend ? '<span class="home-tab-ext">拓展</span>' : ""}</button>`;
       }).join("")}
     </nav>
 
     <div class="home-swipe" data-home-swipe>
-      ${HOME_TABS.map(
+      ${tabs.map(
         (id) => html`
           <section class="home-pane${homeTab === id ? " is-active" : ""}" data-home-pane="${id}">
             ${renderPane(state, paper, id, from)}
@@ -221,8 +224,12 @@ export function mountFrontNewspaper(root: HTMLElement, state: RuntimeState, acti
   const tabs = root.querySelector<HTMLElement>("[data-home-tabs]");
   if (!swipe) return;
 
-  const index = Math.max(0, HOME_TABS.indexOf(state.homeTab));
-  const last = HOME_TABS.length - 1;
+  // Tab 列表以渲染出的 pane 为准（动态领域下各期可能不同，日历翻旧报也一致）。
+  const tabIds = Array.from(swipe.querySelectorAll<HTMLElement>("[data-home-pane]")).map(
+    (pane) => pane.dataset.homePane as DomainId,
+  );
+  const index = Math.max(0, tabIds.indexOf(state.homeTab));
+  const last = tabIds.length - 1;
   const widthOf = () => swipe.clientWidth;
 
   const align = (behavior: ScrollBehavior = "auto") => {
@@ -237,7 +244,7 @@ export function mountFrontNewspaper(root: HTMLElement, state: RuntimeState, acti
   const go = (next: number) => {
     if (settling) return;
     const clamped = Math.max(0, Math.min(last, next));
-    const id = HOME_TABS[clamped];
+    const id = tabIds[clamped];
     if (!id) return;
     const width = widthOf();
     if (width > 0) swipe.scrollTo({ left: clamped * width, behavior: "smooth" });

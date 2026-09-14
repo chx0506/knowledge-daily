@@ -30,7 +30,26 @@ export class ApiError extends Error {
 }
 
 const FIXTURE_KEY = "kd.fixture";
+const SIGNAL_ONLY_KEY = "kd.signalOnly";
 const DEFAULT_TIMEOUT_MS = 9000;
+
+/** 「只看我的方向」开关（localStorage 持久化，默认关）：开 → daily/regenerate 带 blind=0。 */
+export function isSignalOnly(): boolean {
+  try {
+    return window.localStorage.getItem(SIGNAL_ONLY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setSignalOnly(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(SIGNAL_ONLY_KEY, "1");
+    else window.localStorage.removeItem(SIGNAL_ONLY_KEY);
+  } catch {
+    /* localStorage 不可用时开关仅当次生效 */
+  }
+}
 
 /** 显式 fixture 模式：?fixture=1 或 localStorage kd.fixture=1（?fixture=0 可清除）。 */
 export function isFixtureForced(): boolean {
@@ -90,18 +109,22 @@ export const api = {
     return request("/api/profile/preferences", { method: "POST", body: JSON.stringify(preferences) });
   },
 
-  daily(options: { domains?: number; ai?: boolean } = {}, timeoutMs = 90000): Promise<RemoteDaily> {
+  daily(options: { domains?: number; ai?: boolean; blind?: boolean } = {}, timeoutMs = 90000): Promise<RemoteDaily> {
     const params = new URLSearchParams();
     if (options.domains) params.set("domains", String(options.domains));
     if (options.ai === false) params.set("ai", "false");
+    // blind 缺省=1（补盲开），只有「只看我的方向」开启时才显式带 blind=0。
+    if (options.blind === false) params.set("blind", "0");
     const query = params.toString();
     return request<RemoteDaily>(`/api/daily${query ? `?${query}` : ""}`, {}, timeoutMs);
   },
 
-  regenerateDaily(options: { domains?: number } = {}, timeoutMs = 120000): Promise<RemoteDaily> {
+  regenerateDaily(options: { domains?: number; blind?: boolean } = {}, timeoutMs = 120000): Promise<RemoteDaily> {
+    const body: { domains: number; blind?: number } = { domains: options.domains ?? 8 };
+    if (options.blind === false) body.blind = 0;
     return request<RemoteDaily>(
       "/api/daily/regenerate",
-      { method: "POST", body: JSON.stringify({ domains: options.domains ?? 3 }) },
+      { method: "POST", body: JSON.stringify(body) },
       timeoutMs,
     );
   },

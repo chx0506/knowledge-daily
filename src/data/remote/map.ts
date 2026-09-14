@@ -15,7 +15,6 @@ import type {
 } from "@/domain/types";
 import type {
   RemoteDaily,
-  RemoteDomainId,
   RemoteDomainReport,
   RemoteProfile,
   RemoteSignalCoverage,
@@ -23,14 +22,18 @@ import type {
   EditionSource,
 } from "./types";
 
-/** 后端 6 领域 → 前端目录 id（前端把「国内」叫 domestic，其余同名）。 */
-export const REMOTE_TO_FRONT_DOMAIN: Record<RemoteDomainId, DomainId> = {
+/** 后端 10 领域 → 前端目录 id（前端把「国内」叫 domestic，其余同名）。 */
+export const REMOTE_TO_FRONT_DOMAIN: Record<string, DomainId> = {
   tech: "tech",
   finance: "finance",
   china: "domestic",
   world: "world",
   life: "life",
   culture: "culture",
+  gaming: "gaming",
+  design: "design",
+  science: "science",
+  travel: "travel",
 };
 
 const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -71,8 +74,12 @@ function reportParagraphs(report: string): string[] {
   return parts.length ? parts : [report.trim()].filter(Boolean);
 }
 
+/**
+ * 后端 domain_id → 前端 DomainId。
+ * 未知 id 不再静默归「科技」：保留原 id，由 domainMeta 的通用版式兜底展示。
+ */
 function mapId(remoteId: string): DomainId {
-  return REMOTE_TO_FRONT_DOMAIN[remoteId as RemoteDomainId] ?? "tech";
+  return REMOTE_TO_FRONT_DOMAIN[remoteId] ?? (remoteId as DomainId);
 }
 
 function mapReadings(domain: RemoteDomainReport): DomainReading[] {
@@ -116,6 +123,7 @@ function mapDomainStory(daily: RemoteDaily, domain: RemoteDomainReport): DomainS
     readings: mapReadings(domain),
     indexNote: mapIndexNote(domain),
     tier: domain.tier,
+    blindMode: domain.blind_mode,
   };
   story.cardId = domain.recommended[0]?.source_id ?? story.id;
   return story;
@@ -200,6 +208,7 @@ export function mapDailyToPaper(daily: RemoteDaily, origin: EditionSource): Dail
     stale: daily.stale || origin === "stale",
     warnings,
     origin,
+    fillMode: daily.fill_mode,
   };
 }
 

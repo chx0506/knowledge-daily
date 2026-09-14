@@ -3,7 +3,19 @@
  * 以 dianzi-baozhi-data-api 的实际响应为准，只做读取，不在前端二次加工。
  */
 
-export type RemoteDomainId = "tech" | "finance" | "china" | "world" | "life" | "culture";
+/** 后端 10 领域目录（/api/health 的 domain_catalog）。`(string & {})` 兜底未来新增领域。 */
+export type RemoteDomainId =
+  | "tech"
+  | "finance"
+  | "china"
+  | "world"
+  | "life"
+  | "culture"
+  | "gaming"
+  | "design"
+  | "science"
+  | "travel"
+  | (string & {});
 
 export type RemoteSourceType = "关注" | "收藏" | "创作" | "搜索" | string;
 
@@ -98,6 +110,8 @@ export interface RemoteDomainReport {
   domain_id: RemoteDomainId;
   name: string;
   tier: "deep" | "standard" | "blind";
+  /** 补盲召回模式：profile_anchored=关联拓展 / cold_start=真冷启动，仅 tier=blind 时出现。 */
+  blind_mode?: "profile_anchored" | "cold_start";
   basis: RemoteBasis;
   judgement: string;
   report: string;
@@ -123,6 +137,8 @@ export interface RemoteDaily {
   mainline: RemoteMainline;
   domains: RemoteDomainReport[];
   skipped_domains: RemoteSkippedDomain[];
+  /** 补盲开关回显：with_blind=含关联拓展补盲 / signal_only=只看我的方向（blind=0）。 */
+  fill_mode?: "with_blind" | "signal_only";
   stale: boolean;
   stale_reason?: string;
   warnings: string[];
@@ -141,6 +157,8 @@ export interface RemoteHealth {
   ok: boolean;
   schema_version?: string;
   capabilities?: { content_api?: boolean; oauth_login?: boolean; ai_curation?: boolean };
+  /** 后端领域目录（当前 10 个 domain_id）。 */
+  domain_catalog?: string[];
   missing_env?: string[];
 }
 

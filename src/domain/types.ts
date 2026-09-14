@@ -23,7 +23,11 @@ export type DomainId =
   | "finance"
   | "tech"
   | "life"
-  | "culture";
+  | "culture"
+  | "gaming"
+  | "design"
+  | "science"
+  | "travel";
 
 export type DomainVariant = "cover" | "special" | "card";
 
@@ -68,6 +72,8 @@ export interface DomainStory {
   indexNote?: string;
   /** 后端篇幅档位：deep | standard | blind（补盲）。 */
   tier?: "deep" | "standard" | "blind";
+  /** 补盲召回模式（仅 tier=blind 时后端下发）。 */
+  blindMode?: "profile_anchored" | "cold_start";
   /** 后端反馈用的卡片 id（source_id / card_id）。 */
   cardId?: string;
 }
@@ -123,6 +129,8 @@ export interface DailyPaper {
   warnings?: string[];
   /** 本期来源：live 实时 / stale 过期缓存 / fixture 离线样例。 */
   origin?: "live" | "stale" | "fixture";
+  /** 后端补盲开关回显：with_blind 含拓展 / signal_only 只看我的方向。 */
+  fillMode?: "with_blind" | "signal_only";
 }
 
 export type BriefLength = "short" | "full";

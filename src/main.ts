@@ -12,6 +12,7 @@ import { mountWidgetShowcase } from "@/app/widget-showcase";
 import { archiveRepo } from "@/data/repositories/archive-repo";
 import { PREFERENCE_KEY, preferenceRepo } from "@/data/repositories/preference-repo";
 import { remoteEditionRepo } from "@/data/repositories/remote-edition-repo";
+import { isSignalOnly } from "@/data/remote/client";
 import "@/styles/tokens.css";
 import "@/styles/shell.css";
 import "@/styles/newspaper.css";
@@ -41,6 +42,7 @@ async function bootstrap() {
     auth: { state: "unknown", oauthReady: false },
     directionOptions: [],
     readingFeedback: {},
+    signalOnly: isSignalOnly(),
   });
 
   const actions = createActions(store, {

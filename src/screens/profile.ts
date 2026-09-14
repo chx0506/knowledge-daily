@@ -195,6 +195,15 @@ export function renderProfile(state: RuntimeState): string {
             <i></i>
           </button>
         </div>
+        <div class="mine-pref">
+          <div class="mine-pref-copy">
+            <b>只看我的方向</b>
+            <span>${state.signalOnly ? "只出与你兴趣相关的板块" : "开启后只出与你兴趣相关的板块，关掉会顺带做关联拓展"}</span>
+          </div>
+          <button class="mine-switch${state.signalOnly ? " is-on" : ""}" type="button" data-action="toggle-signal-only" aria-pressed="${state.signalOnly}" aria-label="只看我的方向">
+            <i></i>
+          </button>
+        </div>
       </section>
 
       <section class="mine-desk">

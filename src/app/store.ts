@@ -33,6 +33,8 @@ export interface RuntimeState {
   directionOptions: string[];
   /** 已提交给 /api/feedback 的阅读反馈：source_id → feedback。 */
   readingFeedback: Record<string, string>;
+  /** 「只看我的方向」开关：开 → daily/regenerate 带 blind=0（localStorage kd.signalOnly 持久化）。 */
+  signalOnly: boolean;
 }
 
 type Listener = (state: RuntimeState) => void;

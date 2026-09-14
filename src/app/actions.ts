@@ -1,6 +1,6 @@
-import { AUTH_LOGIN_URL, api, isFixtureForced } from "@/data/remote/client";
+import { AUTH_LOGIN_URL, api, isFixtureForced, setSignalOnly } from "@/data/remote/client";
 import { findInterestCard } from "@/data/mock/interest-cards";
-import { HOME_TABS, findDomainBlock } from "@/domain/catalog";
+import { findDomainBlock, homeTabs } from "@/domain/catalog";
 import { stamp, startTyping, stopTyping } from "@/shared/typewriter-sound";
 import type { RemoteEdition } from "@/data/repositories/remote-edition-repo";
 import type { ArchiveRepo } from "@/data/repositories/archive-repo";
@@ -65,7 +65,7 @@ export function createActions(
 
     selectHomeTab(domainId: DomainId) {
       const state = store.get();
-      if (!HOME_TABS.includes(domainId) || state.homeTab === domainId) return;
+      if (!homeTabs(editionOf(state)).includes(domainId) || state.homeTab === domainId) return;
       store.set({
         homeTab: domainId,
         domainId: domainId === "recommend" ? null : domainId,
@@ -74,7 +74,7 @@ export function createActions(
     },
 
     openHomeStory(domainId: DomainId, storyId: string | null) {
-      if (!HOME_TABS.includes(domainId)) {
+      if (!homeTabs(store.get().paper).includes(domainId)) {
         store.set({
           route: "domain",
           domainId,
@@ -189,6 +189,13 @@ export function createActions(
     togglePref(key: "morningPush" | "weekendSkip") {
       const { profile } = store.get();
       this.patchProfile({ [key]: !profile[key] });
+    },
+
+    /** 「只看我的方向」：持久化到 localStorage，下一期 daily/regenerate 请求带 blind=0。 */
+    toggleSignalOnly() {
+      const next = !store.get().signalOnly;
+      setSignalOnly(next);
+      store.set({ signalOnly: next });
     },
 
     patchProfile(patch: Partial<UserProfile>) {

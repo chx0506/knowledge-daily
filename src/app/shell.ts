@@ -49,6 +49,10 @@ export function createShell(root: {
         actions.togglePref(target.dataset.pref);
         return;
       }
+      if (action === "toggle-signal-only") {
+        actions.toggleSignalOnly();
+        return;
+      }
       if (action === "skip-onboard") {
         actions.skipOnboard();
         return;
