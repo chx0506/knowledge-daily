@@ -1304,19 +1304,15 @@
   min-height: 40px;
 }
 
-/* 聊天消息：一条一条冒出来 */
+/* 聊天消息：一条一条冒出来（无内框，文字直接落在气泡上） */
 .msg {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 9px 12px;
-  border: 1px solid #e4dac4;
-  border-radius: 4px 14px 14px 14px;
-  background: #fbf6ea;
-  box-shadow: 0 2px 0 #0001;
-  font-size: 12px;
+  width: 100%;
+  font: 700 15px var(--serif);
+  color: #16120f;
   animation: msg-in 0.24s ease both;
 }
 
