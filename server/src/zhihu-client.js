@@ -55,8 +55,32 @@ function parseJsonSafe(text) {
   return JSON.parse(patched);
 }
 
+/**
+ * 出站节流：保证两次上游请求之间至少间隔 REQUEST_GAP_MS。
+ *
+ * 起因（真实数据实测）：冷启动一次日报会连续发出十几次搜索（画像标签核验 ≤4 次 +
+ * 每领域 ≤2 次），实测触发开放平台的**频率**限制（不是日额度——当时搜索池只用了
+ * 35/5000），报错 `rate limit exceeded`，直接导致该领域召回为空。
+ * 领域本身已是串行处理，缺的只是请求之间的间隔。
+ *
+ * 代价：一次冷日报约十几次请求 × 120ms ≈ 1.5s，换来的是不再整条召回失败。
+ */
+const REQUEST_GAP_MS = Number(process.env.ZHIHU_REQUEST_GAP_MS ?? 120);
+let lastRequestAt = 0;
+let gate = Promise.resolve();
+
+function throttle() {
+  gate = gate.then(async () => {
+    const wait = lastRequestAt + REQUEST_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastRequestAt = Date.now();
+  });
+  return gate;
+}
+
 async function request(url, { headers = {}, method = 'GET', body, apiId } = {}) {
   trackApiCall(apiId);
+  await throttle();
   let res;
   try {
     res = await fetch(url, { method, headers, body });
@@ -252,6 +276,55 @@ export async function zhidaComplete(prompt, {
 }
 
 /** 让直答按 JSON 返回；失败时抛出，由调用方降级到规则版 */
+/**
+ * 修复被截断的 JSON。
+ *
+ * 直答产出较长（judgement + 3 段正文 + 推荐数组），命中 token 上限时会在半句处
+ * 断掉——这正是「直答返回的 JSON 无法解析」的主因，而且它偏偏发生在内容最长的
+ * 那个领域上（实测：culture）。
+ *
+ * 做法：从尾部逐个「候选切点」（逗号、冒号）回退，每次尝试「补齐括号后解析」，
+ * 成功即返回。切点数量受正文逗号数限制（几十个），代价可接受。
+ * 修不好的仍返回 null 走上层降级——不假装成功。
+ */
+function closeBrackets(head) {
+  let inString = false;
+  let escaped = false;
+  const stack = [];
+  for (const ch of head) {
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  if (inString) return null;          // 仍处在字符串里：这个切点不可用
+  let out = head;
+  while (stack.length) out += stack.pop() === '{' ? '}' : ']';
+  return out;
+}
+
+export function repairTruncatedJson(text) {
+  // 候选切点：所有逗号与冒号，从尾部往前逐个尝试。
+  // 不能只取「最后一个」——切在冒号上会留下「有键无值」（{"a":"x","report"}），
+  // 必须继续回退到键前面的那个逗号才成立。
+  const cuts = [text.length];
+  for (let i = text.length - 1; i > 0; i -= 1) {
+    const ch = text[i];
+    if (ch === ',' || ch === ':') cuts.push(i);
+  }
+  for (const cut of cuts) {
+    const head = text.slice(0, cut).replace(/[,\s]+$/, '');
+    const closed = closeBrackets(head);
+    if (!closed) continue;
+    // 必须真的解析一次才算数：只构造字符串不验证，会在第一个候选点
+    // （例如切在冒号上、留下「有键无值」）就直接返回非法结果。
+    try { JSON.parse(closed); return closed; } catch { /* 这个切点不成立，继续往前 */ }
+  }
+  return null;
+}
+
 export async function zhidaJson(prompt, opts = {}) {
   const raw = await zhidaComplete(prompt, {
     system: '你是严谨的内容编辑。只输出合法 JSON，不要输出 Markdown 代码块标记或任何解释文字。',
@@ -267,10 +340,15 @@ export async function zhidaJson(prompt, opts = {}) {
   try {
     return JSON.parse(body);
   } catch {
-    // 容错：截到最后一个闭合括号再试
+    // 容错①：截到最后一个闭合括号再试
     const end = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
     if (end > 0) {
       try { return JSON.parse(body.slice(0, end + 1)); } catch { /* fallthrough */ }
+    }
+    // 容错②：被 token 上限截断时，逐切点回退补齐后再试
+    const repaired = repairTruncatedJson(body);
+    if (repaired) {
+      try { return JSON.parse(repaired); } catch { /* fallthrough */ }
     }
     throw new ZhihuApiError('直答返回的 JSON 无法解析');
   }

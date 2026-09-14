@@ -165,7 +165,17 @@ export function mapDailyToPaper(daily: RemoteDaily, origin: EditionSource): Dail
   const curation = CURATION_LABEL[daily.data_source?.curation ?? ""] ?? "知乎策展";
   const tags = daily.profile.tags.slice(0, 2).map((tag) => tag.name);
   const firstReadName = daily.mainline.first_read?.name ?? blocks[0]?.lead.domainId ?? "";
-  const warnings = [...(daily.warnings ?? [])];
+  // 后端 warnings 里混着内部步骤诊断（如「recall.search(culture): rate limit exceeded」
+  // 「curate.ai(culture) 已降级到规则版…」）。这类信息对读者没有意义，出现在报纸上
+  // 只会让人以为产品坏了。告警条只留「读者能理解的状态」（离线样例 / 上一期缓存），
+  // 技术诊断转到 console 便于排查——不是丢掉，是换个地方。
+  const rawWarnings = daily.warnings ?? [];
+  const isInternal = (w: string) => /^[a-z_]+\.[a-zA-Z_]+\(/.test(String(w).trim());
+  const internal = rawWarnings.filter(isInternal);
+  if (internal.length) {
+    console.warn("[knowledge-daily] 后端内部诊断（不展示给读者）:", internal);
+  }
+  const warnings = rawWarnings.filter((w) => !isInternal(w));
   if (daily.stale_reason) warnings.unshift(daily.stale_reason);
 
   const generatedAt = daily.generated_at ? new Date(daily.generated_at * 1000) : new Date();

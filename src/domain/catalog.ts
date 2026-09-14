@@ -81,9 +81,12 @@ export const HOME_TABS: DomainId[] = [
  * 这里统一回落到推荐版。
  */
 export function visibleHomeTabs(paper: DailyPaper): DomainId[] {
-  return HOME_TABS.filter(
-    (id) => id === "recommend" || paper.domains.some((block) => block.domainId === id),
-  );
+  const present = paper.domains.map((block) => block.domainId);
+  // 先按 HOME_TABS 的固定次序排（推荐恒在首位），再补上常量之外、本次真的出报的领域——
+  // 否则「国内 / 国际」这类没写进 HOME_TABS 的领域会出内容却没有入口可进。
+  const ordered = HOME_TABS.filter((id) => id === "recommend" || present.includes(id));
+  const extra = present.filter((id) => !HOME_TABS.includes(id) && id !== "recommend");
+  return [...ordered, ...extra];
 }
 
 export const BOARD_ORDER: DomainId[] = ["tech", "finance", "domestic", "world", "culture", "life"];
