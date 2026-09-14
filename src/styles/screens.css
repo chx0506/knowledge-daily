@@ -1293,12 +1293,6 @@
   transform: translateX(-50%) rotate(45deg);
 }
 
-.bubble h1 {
-  margin: 0 0 14px;
-  font: 900 21px / 1.25 var(--serif);
-  color: #16120f;
-}
-
 .faint {
   color: #aaa;
 }
@@ -1331,19 +1325,6 @@
     opacity: 0;
     transform: translateY(8px) scale(0.97);
   }
-}
-
-.msg i {
-  padding: 4px 6px;
-  border: 1px solid #8a7d6a;
-  font-style: normal;
-  font-size: 10px;
-}
-
-.msg.done i {
-  border-color: var(--red);
-  background: var(--red);
-  color: #f8f3ea;
 }
 
 .msg.done b {

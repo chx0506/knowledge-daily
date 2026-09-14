@@ -13,18 +13,15 @@ export function renderGenerating(state: RuntimeState): string {
     <div class="loading">
       <div class="overline faint">LIU KANSHAN / 看山派送中</div>
       <div class="bubble">
-        <h1>看山正在把<br />知乎趣报送来…</h1>
         <div class="steps">
           ${current
             ? (() => {
-                const no = String(currentIndex + 1).padStart(2, "0");
                 const body =
                   current.status === "active"
                     ? '<span class="typing" aria-label="进行中"><i></i><i></i><i></i></span>'
                     : '<span class="msg-check" aria-label="完成">✓</span>';
                 return html`
                   <div class="msg ${current.status}">
-                    <i>${no}</i>
                     <b>${current.label}</b>
                     ${body}
                   </div>
