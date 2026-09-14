@@ -1,248 +1,216 @@
-# 知日报 · 部署照做清单（Sealos）
+# 知日报 · 部署照做清单（Sealos 应用管理）
 
-> 逐条复制粘贴即可。每步都有**预期输出**，对不上就停下看第六节排查。
-> 目标：拿到公网 HTTPS 地址 → 登记 OAuth 回调 → 完成知乎账号登录。
-
----
-
-## 为什么必须「单服务同源」
-
-前端调相对路径 `/api/...`，后端 CORS 只放行 `PUBLIC_BASE_URL` 自身源，
-且 OAuth 回调要落在同一 origin 才能带上会话 Cookie。
-所以线上由 `server/server.js` **同时托管前端 `dist/` 与 `/api`**（已实现）。
+> 你的 Sealos 工作区**没有 DevBox**，只有「应用商店 / 应用管理 / 数据库 / 对象存储 / 费用中心」。
+> 应用管理只接受 **Docker 镜像**，而本机没装 Docker ——
+> 所以由 **GitHub Actions 在云端构建镜像**，Sealos 负责拉取运行。
+>
+> 逐条照做即可，每步都有**预期结果**，对不上看第七节排查。
 
 ---
 
-## 第 0 步 · 注册（约 5 分钟）
+## 路径总览
 
-1. 打开 <https://cloud.sealos.io> 用手机号注册并登录
-2. 登录后能看到「应用管理 / DevBox / 数据库 / 对象存储」等工作台入口
-
----
-
-## 第 1 步 · 创建 DevBox（约 5 分钟）
-
-1. 进入 **DevBox** → **创建项目**
-2. **环境**：选 Node.js（版本 20 或以上）
-3. **资源**：**2C4G** 起（构建前端需要内存，1G 容易 OOM）
-4. **网络**：暴露端口填 **3000**
-5. **仓库**：导入 `chx0506/knowledge-daily`（公开仓库，无需授权）
-6. 创建后进入 **Web 终端**
-
-> ⚠️ 确认 Node 版本：
-> ```bash
-> node -v      # 期望 v20.x 或更高
-> ```
-> 低于 20 就先升级，否则 Vite 7 会报错。
-
----
-
-## 第 2 步 · 拉代码并构建（约 3 分钟）
-
-```bash
-# 进项目目录（DevBox 一般已 clone 好，没 clone 就执行下面这行）
-cd knowledge-daily || git clone https://github.com/chx0506/knowledge-daily.git && cd knowledge-daily
-
-# 确认拉到的是带部署修复的版本（必须看到 0cb1170 或更新）
-git log --oneline -1
-
-# 安装依赖
-npm install
-
-# 构建前端 → 产出 dist/
-npm run build
-
-# 确认产物存在
-ls dist/index.html
+```
+推送代码 → GitHub Actions 自动构建镜像 → 推到 ghcr.io
+        → 把镜像改成 Public → Sealos 应用管理填镜像地址 → 部署
+        → 拿到公网域名 → 登记 OAuth 回调 → 登录测试
 ```
 
-**预期**：`git log` 显示 `0cb1170 后端：适配队友前端契约 + 打通单服务同源部署`；
-`ls dist/index.html` 无报错。
+---
 
-> ⚠️ 若 `npm install` 报缓存权限错误（EPERM），改用：
-> ```bash
-> npm install --cache /tmp/npm-cache
-> ```
+## 第 1 步 · 触发镜像构建（约 3 分钟）
+
+代码已经推上 main，工作流会自动跑。确认一下：
+
+1. 打开 <https://github.com/chx0506/knowledge-daily/actions>
+2. 应看到 **Build and push image** 正在运行（黄色转圈）
+3. 等它变成 ✅（约 2–3 分钟）
+
+**预期**：构建成功，日志最后会打印镜像地址。
+
+> 如果没自动触发：点进 workflow → 右侧 **Run workflow** → 选 main → 运行。
+
+**构建出来的镜像地址**：
+```
+ghcr.io/chx0506/knowledge-daily:latest
+```
 
 ---
 
-## 第 3 步 · 配置环境变量
+## 第 2 步 · 把镜像改成公开（关键，漏了 Sealos 拉不到）
 
-**先拿到要填的值。** 在**你自己的 Mac** 上执行下面这条，把输出复制走（会打印密钥，别贴到公开地方）：
+ghcr 的 package **默认是私有**的，Sealos 无法拉取。
+
+1. 打开 <https://github.com/chx0506?tab=packages>
+2. 点进 **knowledge-daily**
+3. 右侧 **Package settings** → 拉到底 **Danger Zone**
+4. **Change visibility** → 选 **Public** → 输入包名确认
+
+**预期**：package 页面顶部不再显示 "Private"。
+
+> 不想公开也行，但那样要在 Sealos 里填 GitHub 用户名 + Personal Access Token，
+> 麻烦且容易出错。黑客松期间公开镜像没问题。
+
+---
+
+## 第 3 步 · 在 Sealos 创建应用（约 5 分钟）
+
+进入 **应用管理** → **创建应用**，按下面填：
+
+| 表单项 | 填什么 |
+|---|---|
+| 应用名称 | `knowledge-daily` |
+| 镜像名称 | `ghcr.io/chx0506/knowledge-daily:latest` |
+| 部署模式 | **固定实例**，实例数 `1` |
+| 计算资源 | 最小规格即可（0.1 核 / 256MB 起） |
+| 网络 · 协议 | **https** |
+| 网络 · 端口 | **3000** |
+
+> ⚠️ 端口必须是 **3000**，和后端 `PORT` 一致。
+> 协议选 https，Sealos 会自动签发证书。
+
+---
+
+## 第 4 步 · 填环境变量（在同一个创建表单的「高级配置」里）
+
+**先拿到密钥值。** 在**你自己的 Mac** 上执行，把输出复制走：
 
 ```bash
 cd ~/Documents/kimi/Workspaces/知乎比赛/knowledge-daily/server
 grep -E '^(ZHIHU_ACCESS_SECRET|ZHIHU_OAUTH_APP_KEY)=' .env
 ```
 
-这条会同时给出 `ZHIHU_ACCESS_SECRET` 和 `ZHIHU_OAUTH_APP_KEY` 两个值，
-对应替换下面 `.env` 模板里的 `REPLACE_WITH_ACCESS_SECRET` 和 `REPLACE_WITH_OAUTH_APP_KEY`。
+在 Sealos 的**环境变量**区域，逐条添加：
 
-> ⚠️ **本文件不含任何真实密钥**（仓库是公开的）。密钥只存在于你本地的
-> `server/.env` 和 Sealos 平台的环境变量/Secret 里，绝不写进仓库。
+| 变量名 | 值 |
+|---|---|
+| `PUBLIC_BASE_URL` | 先填 `https://placeholder`，第 5 步拿到域名后回来改 |
+| `HOST` | `0.0.0.0` |
+| `PORT` | `3000` |
+| `ZHIHU_ACCESS_SECRET` | 上面 grep 出来的值 |
+| `ZHIHU_OAUTH_APP_ID` | `667` |
+| `ZHIHU_OAUTH_APP_KEY` | 上面 grep 出来的值 |
+| `ZHIHU_OAUTH_REDIRECT_URI` | 先填 `https://placeholder/api/auth/callback`，第 5 步改 |
+| `FREE_SLOT_QUOTA` | `3` |
+| `PROFILE_WINDOW_DAYS` | `60` |
+| `LOGIN_SUCCESS_REDIRECT` | `/` |
 
-回到 DevBox 终端，**粘贴下面整段**（占位符替换成真实值）：
-
-```bash
-cat > knowledge-daily/server/.env <<'EOF'
-PORT=3000
-HOST=0.0.0.0
-PUBLIC_BASE_URL=https://REPLACE_WITH_YOUR_DOMAIN
-ZHIHU_ACCESS_SECRET=REPLACE_WITH_ACCESS_SECRET
-ZHIHU_OAUTH_APP_ID=667
-ZHIHU_OAUTH_APP_KEY=REPLACE_WITH_OAUTH_APP_KEY
-ZHIHU_OAUTH_REDIRECT_URI=https://REPLACE_WITH_YOUR_DOMAIN/api/auth/callback
-FREE_SLOT_QUOTA=3
-PROFILE_WINDOW_DAYS=60
-LOGIN_SUCCESS_REDIRECT=/
-EOF
-chmod 600 knowledge-daily/server/.env
-```
-
-> ⚠️ `PUBLIC_BASE_URL` 和 `ZHIHU_OAUTH_REDIRECT_URI` 里的域名**先留占位符**，
-> 第 5 步拿到公网域名后再回来改。**两者必须完全一致**。
+> ⚠️ **`HOST=0.0.0.0` 绝对不能漏。** 漏了服务只绑容器内回环，
+> 外部完全访问不到，Sealos 会一直显示未就绪。
 >
-> ⚠️ `.env` 已在 `.gitignore` 里，不会进仓库。但仍不要把它复制到别处。
+> ⚠️ 密钥只填在平台的环境变量里，**不要**写进仓库或镜像。
 
 ---
 
-## 第 4 步 · 启动服务（约 1 分钟）
+## 第 5 步 · 部署并拿到公网域名
+
+点 **部署**，等状态变成 **Running**（约 1–2 分钟）。
+
+然后在应用详情页的**网络 / 访问方式**里找到公网地址，形如：
+```
+https://xxxxx.<region>.sealos.run
+```
+
+**回到第 4 步，把两个占位符改成真实域名**（改完保存，Sealos 会自动重启）：
+
+```
+PUBLIC_BASE_URL        = https://你的实际域名
+ZHIHU_OAUTH_REDIRECT_URI = https://你的实际域名/api/auth/callback
+```
+
+**验证**（在你自己 Mac 上执行）：
 
 ```bash
-cd knowledge-daily
-node server/server.js
+curl -s https://你的域名/api/health | head -c 400
+curl -s -o /dev/null -w "%{http_code}\n" https://你的域名/
 ```
 
-**预期输出**（已按真实运行结果核对）：
-```
-  知识日报 · 数据接口后端
-  监听 http://0.0.0.0:3000
-  Access Secret : XXXX...XXXX
-  OAuth 凭证    : 已配置
-  回调地址      : https://你的域名/api/auth/callback
-```
+**预期**：健康检查里 `"ok":true` 且 `"missing_env":[]`；首页返回 `200`。
 
-> ⚠️ **监听必须是 `0.0.0.0`**。若显示 `127.0.0.1`，说明 `HOST` 没生效——
-> 容器外将完全访问不到，务必检查第 3 步的 `.env`。
-
-**另开一个终端**验证：
-
-```bash
-curl -s localhost:3000/api/health | head -c 300
-curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/
-```
-
-**预期**：健康检查返回 `"ok":true`，且 `"missing_env":[]`；首页返回 `200`。
+> 首页 200 很关键——它同时证明镜像里的前端产物和后端静态托管都正常。
+> 如果首页 404 但 `/api/health` 正常，说明构建时 `dist/` 没进镜像。
 
 ---
 
-## 第 5 步 · 拿到公网地址并回填
+## 第 6 步 · 登记回调地址（差一个字符就登录失败）
 
-1. 在 DevBox 界面找到**外网访问 / 预览地址**（形如 `https://xxxx.<region>.sealos.run`）
-2. 用浏览器打开它，**应能看到知日报首页**
-3. 回到终端，把域名填进去：
+先确认后端生成的地址是什么：
 
 ```bash
-cd knowledge-daily/server
-sed -i 's|REPLACE_WITH_YOUR_DOMAIN|你的实际域名（不含 https://）|g' .env
-grep -E 'PUBLIC_BASE_URL|REDIRECT_URI' .env    # 确认已替换
-cd .. && kill %1 2>/dev/null; node server/server.js
-```
-
-**验证公网可达**：
-
-```bash
-curl -s https://你的域名/api/health | grep -o '"ok":true'
 curl -s "https://你的域名/api/auth/login?format=json"
 ```
 
-**预期**：第二条返回的 `authorize_url` 里，`app_id=667`，
+**预期**：返回的 `authorize_url` 里 `app_id=667`，
 且 `redirect_uri` **等于** `https://你的域名/api/auth/callback`。
 
----
-
-## 第 6 步 · 登记回调地址（关键，差一个字符就失败）
-
-到知乎开放平台，把下面这个地址登记为 OAuth 回调：
+把这个地址登记到知乎开放平台：
 
 ```
 https://你的域名/api/auth/callback
 ```
 
 > ⚠️ 路径是 **`/api/auth/callback`**，不是脚手架用的 `/auth/callback`。
-> 必须与第 5 步验证出的 `redirect_uri` **完全一致**。
+> 必须与上面验证出的 `redirect_uri` 完全一致（含 https、无末尾斜杠）。
 
 ---
 
 ## 第 7 步 · 真实登录测试
 
 1. 浏览器打开 `https://你的域名/`
-2. 点击「授权知乎账号」
+2. 点「授权知乎账号」
 3. **由你本人**在知乎授权页点最终确认（不要代点）
-4. 回到应用，确认已显示登录状态
+4. 回到应用确认已登录
 
-**排查**：
 ```bash
 curl -s https://你的域名/api/auth/me
 # 已登录 → {"logged_in":true,...}
-# 未登录 → {"logged_in":false,"login_url":...}
 ```
 
 ---
 
-## 第 8 步 · 发布为正式应用（可选但推荐）
-
-DevBox 是开发态入口，长期对外服务建议进 **应用管理（App Launchpad）**：
-
-1. 环境变量照抄第 3 步（改用平台的 **Secret / 环境变量**功能，**不要**写进镜像或源码）
-2. 启动命令：`node server/server.js`
-3. 端口：`3000`
-4. 发布后拿到新的稳定域名 → **回到第 6 步重新登记回调**
-
-> 注意：换域名就必须重新登记回调，否则登录再次失效。
-
----
-
-## 六、排查表
+## 七、排查表
 
 | 症状 | 原因 |
 |---|---|
-| 页面打不开但进程在跑 | `HOST` 没设 `0.0.0.0`，或平台暴露端口 ≠ `PORT` |
-| 构建 OOM / 卡死 | 资源给到 2C4G 以上 |
+| Actions 里看不到 workflow | workflow 文件没在 main 分支上 |
+| Actions 构建失败 | 看日志；多为 `npm ci` 锁文件不一致 |
+| Sealos 报镜像拉取失败 | **package 还是 Private**（第 2 步没做） |
+| 应用一直未就绪 / 页面打不开 | **`HOST` 没设 `0.0.0.0`**，或端口不是 3000 |
+| 首页 404 但 /api 正常 | 镜像里没有 `dist/`，前端没构建进镜像 |
 | 登录后回首页仍未登录 | `PUBLIC_BASE_URL` 与实际域名不一致 → Cookie 没带上 |
 | 授权页报 redirect_uri 不合法 | 登记值与实际地址不完全一致（注意 `/api/auth/callback`） |
 | 授权后 401 | 知乎账号未绑手机号 / 未实名 |
-| `/api/health` 报 `missing_env` | `.env` 里对应变量为空 |
-| 前端白屏 | `dist/` 没构建成功，或构建产物是旧版本 |
+| `/api/health` 报 `missing_env` | 对应环境变量没填或填空 |
 
 ---
 
-## 七、环境变量速查
+## 八、环境变量速查
 
 | 变量 | 必填 | 说明 |
 |---|:--:|---|
 | `PUBLIC_BASE_URL` | ✅ | 公网地址。**同时决定 CORS 白名单与会话 Cookie 的 Secure 标志** |
-| `HOST` | ✅ | 容器内必须 `0.0.0.0` |
-| `PORT` | | 默认 3000，须与平台暴露端口一致 |
+| `HOST` | ✅ | 必须 `0.0.0.0` |
+| `PORT` | ✅ | `3000`，须与 Sealos 网络端口一致 |
 | `ZHIHU_ACCESS_SECRET` | ✅ | 内容接口鉴权 |
 | `ZHIHU_OAUTH_APP_ID` | 登录必填 | `667` |
-| `ZHIHU_OAUTH_APP_KEY` | 登录必填 | 只放平台 Secret 或本地 `.env`，**绝不进仓库/镜像** |
+| `ZHIHU_OAUTH_APP_KEY` | 登录必填 | 只填平台环境变量，**绝不进仓库/镜像** |
 | `ZHIHU_OAUTH_REDIRECT_URI` | 登录必填 | `https://<域名>/api/auth/callback` |
 
 ---
 
-## 附：Docker 部署（备选）
+## ⚠️ 关于余额
 
-仓库根目录已有 `Dockerfile`（多阶段：构建前端 → 只带产物与零依赖后端）。
+你的工作区余额显示 **¥5.00**。Sealos 按 CPU/内存**按小时计费**，
+应用只要处于 Running 状态就会持续扣费。
 
-```bash
-docker build -t knowledge-daily .
-docker run -p 3000:3000 \
-  -e PUBLIC_BASE_URL=https://<域名> \
-  -e HOST=0.0.0.0 \
-  -e ZHIHU_ACCESS_SECRET=... \
-  -e ZHIHU_OAUTH_APP_ID=667 \
-  -e ZHIHU_OAUTH_APP_KEY=... \
-  -e ZHIHU_OAUTH_REDIRECT_URI=https://<域名>/api/auth/callback \
-  knowledge-daily
-```
+- 提交后到 9/23（人气奖计分结束）之间需要**一直可访问**
+- 建议：部署后去**费用中心**确认实际消耗速率，余额不够及时充值
+- 演示/调试期间不用时可以先**暂停应用**，别让它空跑掉余额
+
+---
+
+## 九、后续更新代码怎么办
+
+改完代码推到 main，Actions 会自动重新构建镜像。
+但因为镜像标签是 `latest`，需要**在 Sealos 应用里手动触发一次重新部署**
+（应用详情 → 变更/重启），才会拉到新镜像。
