@@ -1255,9 +1255,48 @@
   color: #f1e8d8;
 }
 
-.loading h1 {
-  margin: 10px 0 28px;
-  font: 900 30px / 1.1 var(--serif);
+/* 看山派送视频卡 */
+.courier {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #2a2c2c;
+  border-radius: 26px;
+  background: #ffd21a;
+  box-shadow: 0 18px 36px #0009;
+}
+
+.courier-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+/* 看山对话框：进程在气泡里进行 */
+.bubble {
+  position: relative;
+  margin-top: 18px;
+  padding: 16px 16px 6px;
+  border-radius: 20px;
+  background: #f1e8d8;
+  color: #16120f;
+  box-shadow: 0 14px 30px #0007;
+}
+
+.bubble-tail {
+  position: absolute;
+  top: -7px;
+  left: 42px;
+  width: 16px;
+  height: 16px;
+  background: #f1e8d8;
+  transform: rotate(45deg);
+}
+
+.bubble h1 {
+  margin: 0 0 14px;
+  font: 900 21px / 1.25 var(--serif);
+  color: #16120f;
 }
 
 .faint {
@@ -1265,32 +1304,68 @@
 }
 
 .steps {
-  border-top: 1px solid #eee;
+  border-top: 1px solid #d8cbaa;
 }
 
 .step {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 48px;
-  border-bottom: 1px solid #777;
+  min-height: 48px;
+  border-bottom: 1px solid #e4dac4;
   font-size: 12px;
 }
 
 .step i {
   padding: 5px 7px;
-  border: 1px solid #eee;
+  border: 1px solid #8a7d6a;
   font-style: normal;
 }
 
 .step.done i {
-  background: #eee;
-  color: #111;
+  border-color: var(--red);
+  background: var(--red);
+  color: #f8f3ea;
 }
 
 .step-detail {
   margin-left: auto;
-  color: #aaa;
+  color: #8a7d6a;
+}
+
+/* 进行中的「正在输入」三点 */
+.typing {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 8px;
+}
+
+.typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: typing-blink 1s ease-in-out infinite;
+}
+
+.typing i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.typing i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes typing-blink {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 
 .spinner {
