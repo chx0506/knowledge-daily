@@ -166,11 +166,27 @@ function renderPane(state: RuntimeState, paper: DailyPaper, tab: DomainId, from:
   return renderDomainArticle(state, { embedded: true, domainId: tab, storyId, paper, from });
 }
 
+/**
+ * 告警条已按需求下线（原 `.paper-notice` 白框）。
+ *
+ * 原因：这个位置长期只会长内部步骤诊断（「recall.search(culture): rate limit exceeded」
+ * 「curate.ai(culture) 已降级到规则版: 直答返回的 JSON 无法解析」），读者看到只会
+ * 以为产品坏了；而在报纸版面上它又是一块突兀的白框，压住抬头与分版 tab。
+ *
+ * 处理方式不是「丢掉信息」，而是「换个地方」：状态一律转 console，
+ * 排查时照旧可见，读者版面上不再出现。函数保留为显式 no-op，
+ * 避免以后有人顺手把它接回来时忘了这段结论。
+ */
 function renderNotice(paper: DailyPaper): string {
   const warnings = paper.warnings ?? [];
-  if (!warnings.length) return "";
-  const tag = paper.origin === "fixture" ? "离线" : paper.stale ? "缓存" : "提示";
-  return `<div class="paper-notice" role="status"><b>${tag}</b><span>${warnings[0]}</span></div>`;
+  if (warnings.length) {
+    console.warn("[knowledge-daily] 本期状态（不上版面）:", {
+      origin: paper.origin,
+      stale: paper.stale,
+      warnings,
+    });
+  }
+  return "";
 }
 
 export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, from: RouteName): string {
