@@ -2021,26 +2021,11 @@
   }
 }
 
-/* ---------- 后端接通：提示条 / skipped 领域 / 徽标 / 反馈 / 专题 / 画像 ---------- */
+/* ---------- 后端接通：skipped 领域 / 徽标 / 反馈 / 专题 / 画像 ---------- */
 
-.paper-notice {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  margin: 8px 12px 0;
-  padding: 7px 10px;
-  border: 1px solid var(--navy);
-  background: #eef1f6;
-  color: var(--navy);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.paper-notice b {
-  flex: none;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-}
+/* 原 `.paper-notice`（抬头下方的告警白框）已下线，样式一并撤掉：
+   留着死样式容易被顺手接回去，而那块位置长期只长内部步骤诊断。
+   结论与原因见 src/screens/home.ts 的 renderNotice()。 */
 
 .home-tab.is-skipped {
   color: #b6ad9f;
