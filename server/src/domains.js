@@ -169,12 +169,39 @@ export function tagMatchesDomain(tagName, keywords) {
  * 同样进 skipped（原因与 allowBlind=false 领域一致：「无信号依据，今日未生成」），
  * 即「只看我的方向」模式。
  */
+/**
+ * Web 端（schema 4.0 渲染层）当前支持的领域 id 白名单。
+ *
+ * 前端 `src/data/remote/types.ts` 的 `RemoteDomainId` 只声明了这 6 个；
+ * `src/data/remote/map.ts` 的 `mapId()` 对未知 id 静默兜底为 `"tech"`
+ * （`REMOTE_TO_FRONT_DOMAIN[remoteId] ?? "tech"`）。
+ *
+ * 若后端把 gaming / design / science / travel 投递给前端，它们会在
+ * 「生成的领域报告」与「skipped 列表」两处都被渲染成「科技」（名称对、id 错），
+ * 领域 tab、图标与配色随之串位。
+ *
+ * 因此这里只从白名单内选取领域投递 —— **领域目录 `DOMAINS` 本身保持 10 个不变**，
+ * 打分、工作流、召回全部不动，仅限制"哪些领域会被投递给 Web 前端"。
+ *
+ * 前端补齐 `RemoteDomainId` / `REMOTE_TO_FRONT_DOMAIN` 后，在下面的默认值里
+ * 加入新 id 即可放开；也可用 `ZHIHU_WEB_DOMAINS=all` 临时放开全部 10 个领域
+ * （供已适配的前端联调用，无需改代码）。
+ */
+const WEB_DOMAIN_IDS = new Set(
+  (process.env.ZHIHU_WEB_DOMAINS ?? 'tech,finance,china,world,life,culture')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+);
+
+/** 实际会投递给 Web 前端的领域定义列表（`ZHIHU_WEB_DOMAINS=all` 时等于完整目录）。 */
+export const webDomainCatalog = () =>
+  (process.env.ZHIHU_WEB_DOMAINS === 'all' ? DOMAINS : DOMAINS.filter((d) => WEB_DOMAIN_IDS.has(d.id)));
+
 export function scoreDomains(profile, prefs, { blind = true } = {}) {
   const si = profile._signalItems ?? EMPTY_SIGNALS;
   const tags = profile.tags ?? [];
   const topTagName = tags[0]?.name ?? '';
 
-  const ctxs = DOMAINS.map((def) => {
+  const ctxs = webDomainCatalog().map((def) => {
     const matched = {
       directions: (prefs.directions ?? []).filter((d) => matchesAny(d, def.keywords)),
       keywords: (prefs.keywords ?? []).filter((k) => matchesAny(k, def.keywords)),

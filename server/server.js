@@ -14,6 +14,9 @@
 //   POST /api/feedback                日报内反馈
 //   GET  /api/topic/:topic            主动策展专题
 import http from 'node:http';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config, checkConfig, mask } from './src/config.js';
 import {
   ZhihuApiError, fetchQuota, exchangeToken, fetchOAuthUser, buildAuthorizeUrl,
@@ -25,7 +28,7 @@ import {
 } from './src/session.js';
 import { buildProfile, makeUserRef, COLD_START_TAGS } from './src/profile.js';
 import { buildDaily, buildTopicDossier } from './src/daily.js';
-import { DOMAINS } from './src/domains.js';
+import { DOMAINS, webDomainCatalog } from './src/domains.js';
 import {
   getPreferences, setPreferences, recordFeedback, getFeedbacks,
   FEEDBACK_TYPES, feedbackStats,
@@ -105,6 +108,51 @@ const parseTags = (url) => {
 const parseBool = (v, d) => (v === null || v === undefined ? d : !['0', 'false', 'no'].includes(v));
 const parseInt2 = (v, d) => { const n = Number.parseInt(v ?? '', 10); return Number.isFinite(n) ? n : d; };
 
+// ---------------- 静态托管（部署用，本地开发零影响）----------------
+//
+// 部署必须**同源**：前端调的是相对路径 `/api/...`，而 CORS 只放行 publicBaseUrl，
+// 且 OAuth 回调要落在同一 origin 才能带上会话 Cookie。
+// 因此线上由本服务同时托管前端构建产物 dist/ 与 /api。
+//
+// 目录不存在时直接跳过（返回 false）→ 本地开发仍走 Vite dev + proxy，行为不变。
+const STATIC_DIR = path.resolve(
+  process.env.STATIC_DIR
+    || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist'),
+);
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
+};
+
+function serveStatic(req, res, url) {
+  if (!existsSync(STATIC_DIR)) return false;
+  const relPath = decodeURIComponent(url.pathname);
+  if (relPath.includes('\0')) return false;
+  let file = path.resolve(STATIC_DIR, `.${path.posix.normalize(relPath)}`);
+  if (file !== STATIC_DIR && !file.startsWith(STATIC_DIR + path.sep)) return false; // 目录穿越防护
+  if (!existsSync(file) || statSync(file).isDirectory()) {
+    if (path.extname(relPath)) return false;            // 缺失的静态资源 → 交给 404
+    file = path.join(STATIC_DIR, 'index.html');          // SPA 兜底
+    if (!existsSync(file)) return false;
+  }
+  const ext = path.extname(file).toLowerCase();
+  res.writeHead(200, {
+    'Content-Type': MIME[ext] || 'application/octet-stream',
+    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+  });
+  if (req.method === 'HEAD') { res.end(); return true; }
+  createReadStream(file).pipe(res);
+  return true;
+}
+
 // ---------------- 路由 ----------------
 
 async function route(req, res, url) {
@@ -131,6 +179,8 @@ async function route(req, res, url) {
         ai_curation: cfg.canServeContent,
       },
       domain_catalog: DOMAINS.map((d) => d.id),
+      // 实际会投递给 Web 前端的领域（前端 RemoteDomainId 白名单内的子集）
+      web_domain_catalog: webDomainCatalog().map((d) => d.id),
       missing_env: cfg.missing,
       runtime: { ...sessionStats(), ...feedbackStats(), cache: cacheStats() },
     });
@@ -259,8 +309,8 @@ async function route(req, res, url) {
     const force = p.endsWith('/regenerate');
     const { oauthToken, userRef } = ctxOf(req);
     const body = force ? await readJsonBody(req).catch(() => ({})) : {};
-    // domains=1..N：最多生成几个领域，默认 3（替代旧 topics 参数；上限 = 领域目录大小）
-    const maxDomains = Math.max(1, Math.min(DOMAINS.length,
+    // domains=1..N：最多生成几个领域，默认 3（替代旧 topics 参数；上限 = 可投递给前端的领域数）
+    const maxDomains = Math.max(1, Math.min(webDomainCatalog().length,
       parseInt2(url.searchParams.get('domains'), body.domains ?? 3)));
     // 任务四 blind 开关：query 的 blind=0 或 body 的 blind:false/0/'0' 关闭补盲，
     // 缺省开启（保持现有行为）；关闭后无信号领域（含原 allowBlind）全部进 skipped
@@ -312,6 +362,9 @@ async function route(req, res, url) {
     }));
   }
 
+  // --- 静态托管（仅非 /api 路径；目录不存在时自动跳过）---
+  if ((method === 'GET' || method === 'HEAD') && !p.startsWith('/api/') && serveStatic(req, res, url)) return;
+
   return send(res, 404, {
     error: 'not_found',
     message: `未知端点 ${p}`,
@@ -343,10 +396,10 @@ const server = http.createServer(async (req, res) => {
   catch (err) { fail(res, err); }
 });
 
-server.listen(config.port, '127.0.0.1', () => {
+server.listen(config.port, config.host, () => {
   const cfg = checkConfig();
   console.log('\n  知识日报 · 数据接口后端');
-  console.log(`  监听 http://127.0.0.1:${config.port}`);
+  console.log(`  监听 http://${config.host}:${config.port}`);
   console.log(`  Access Secret : ${cfg.canServeContent ? mask(config.accessSecret) : '未配置'}`);
   console.log(`  OAuth 凭证    : ${cfg.canServeOAuth ? '已配置' : '未配置（内容接口仍可用）'}`);
   console.log(`  回调地址      : ${config.oauth.redirectUri}`);

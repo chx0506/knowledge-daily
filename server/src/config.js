@@ -73,6 +73,9 @@ function withApiBase(fullUrl) {
 
 export const config = {
   port: int(process.env.PORT, 3000),
+  // 监听地址：本地开发固定回环；容器/云平台部署必须设 HOST=0.0.0.0，
+  // 否则服务只在容器内部可达，外部路由与健康检查全部落空。
+  host: process.env.HOST || '127.0.0.1',
   publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://127.0.0.1:3000',
 
   accessSecret: normalizeSecret(process.env.ZHIHU_ACCESS_SECRET),

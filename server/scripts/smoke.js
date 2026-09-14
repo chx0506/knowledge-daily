@@ -135,10 +135,18 @@ async function main() {
     }));
   check('skipped_domains 每项都有原因',
     (d.skipped_domains ?? []).every((s) => Boolean(s.reason)));
-  check('生成 + 跳过覆盖全部候选领域（目录含动态领域）',
+  check('生成 + 跳过覆盖全部可投递领域（受前端白名单约束）',
     (d.domains ?? []).length + (d.skipped_domains ?? []).length
-      === (health.json?.domain_catalog?.length ?? 6),
-    `gen=${(d.domains ?? []).length}, skip=${(d.skipped_domains ?? []).length}, catalog=${health.json?.domain_catalog?.length}`);
+      === (health.json?.web_domain_catalog?.length ?? 6),
+    `gen=${(d.domains ?? []).length}, skip=${(d.skipped_domains ?? []).length}, web_catalog=${health.json?.web_domain_catalog?.length}`);
+  // 契约护栏：前端 mapId() 对未知 id 兜底为 "tech"，两个领域同 id 会让
+  // orderedBlocks 的 find() 吃掉一个（整篇报告从报纸上消失）——故下发 id 必须全部在白名单内。
+  const WEB_IDS = health.json?.web_domain_catalog ?? [];
+  const offenders = [...(d.domains ?? []), ...(d.skipped_domains ?? [])]
+    .map((x) => x.domain_id).filter((id) => !WEB_IDS.includes(id));
+  check('契约：下发的领域 id 全部在前端白名单内（不会被兜底成 tech）',
+    offenders.length === 0,
+    offenders.length ? `越界: ${[...new Set(offenders)].join(', ')}` : `全部 ∈ {${WEB_IDS.join(',')}}`);
   check('日报生成无 warning', (d.warnings ?? []).length === 0, (d.warnings ?? []).join('; ') || '无');
 
   // 6. 缓存
@@ -161,12 +169,20 @@ async function main() {
       && (x.recommended ?? []).every((r) => r.url?.startsWith('http') && r.why_now)));
 
   // 7b. 动态领域（D1）与可观测性（B2）、作者主页（C1）
+  // D1 的「能力」仍在（目录含 10 领域、工作流齐全），但「投递」受前端白名单约束：
+  // 未适配的前端把 gaming/design/science/travel 兜底成 tech，会吃掉整篇领域报告。
+  // 白名单外的领域因此不投递，放开方式见下方 ZHIHU_WEB_DOMAINS=all 留门用例。
   const wide = await req('/api/daily?domains=10');
   const wDoms = wide.json?.domains ?? [];
   const wIds = new Set(wDoms.map((x) => x.domain_id));
-  check('动态领域：画像信号能打出新领域（游戏/设计/科学/旅行）',
-    ['gaming', 'design', 'science', 'travel'].every((id) => wIds.has(id)),
-    [...wIds].join(', '));
+  check('动态领域（D1）：目录仍含 10 个领域（能力未被削弱）',
+    ['gaming', 'design', 'science', 'travel']
+      .every((id) => (health.json?.domain_catalog ?? []).includes(id)),
+    `catalog=${(health.json?.domain_catalog ?? []).length}: ${(health.json?.domain_catalog ?? []).join(',')}`);
+  check('动态领域（D1）：白名单生效，投递不超出可投递领域数',
+    wDoms.length <= (health.json?.web_domain_catalog ?? []).length
+      && [...wIds].every((id) => (health.json?.web_domain_catalog ?? []).includes(id)),
+    `${wDoms.length} 篇: ${[...wIds].join(', ')}`);
   const m = wide.json?.metrics;
   check('日报含 metrics 且 total_ms > 0',
     Boolean(m) && typeof m.total_ms === 'number' && m.total_ms > 0,
@@ -375,6 +391,43 @@ async function main() {
       const st2 = await fetch(`${SIM}/_sim/stats`).then((r) => r.json()).catch(() => null);
       check('探测开启后 creator 池确实被消耗（开关语义打通）',
         (st2?.by_api?.creator ?? 0) >= 1, `creator=${st2?.by_api?.creator ?? 0}`);
+    } finally {
+      child.kill();
+      await fetch(`${SIM}/_sim/reset`).catch(() => {});
+    }
+  }
+
+  // 16. ZHIHU_WEB_DOMAINS=all 留门验证（第二业务实例，测完即关）
+  // 前端补齐 RemoteDomainId / REMOTE_TO_FRONT_DOMAIN 后，用这一个环境变量即可
+  // 放开全部 10 个领域，无需改代码——证明白名单是"闸门"而非"阉割"。
+  if (simOk) {
+    const { spawn } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const serverEntry = fileURLToPath(new URL('../server.js', import.meta.url));
+    const child = spawn(process.execPath, [serverEntry], {
+      env: {
+        ...process.env, PORT: '3198', ZHIHU_WEB_DOMAINS: 'all',
+        ZHIHU_ACCESS_SECRET: process.env.ZHIHU_ACCESS_SECRET || 'sim-dummy',
+        ZHIHU_API_BASE: SIM,
+      },
+      stdio: 'ignore',
+    });
+    try {
+      let up = false;
+      for (let i = 0; i < 40 && !up; i += 1) {
+        await new Promise((r) => setTimeout(r, 250));
+        up = await fetch('http://127.0.0.1:3198/api/health').then((r) => r.ok).catch(() => false);
+      }
+      const h2 = await fetch('http://127.0.0.1:3198/api/health').then((r) => r.json()).catch(() => null);
+      check('ZHIHU_WEB_DOMAINS=all 时 health 报告完整 10 领域（留门可用）',
+        (h2?.web_domain_catalog ?? []).length === 10,
+        `web_catalog=${(h2?.web_domain_catalog ?? []).length}`);
+      const d2 = await fetch('http://127.0.0.1:3198/api/daily?domains=10')
+        .then((r) => r.json()).catch(() => null);
+      const ids2 = new Set((d2?.domains ?? []).map((x) => x.domain_id));
+      check('放开后新领域确实可投递（游戏/设计/科学/旅行）',
+        ['gaming', 'design', 'science', 'travel'].every((id) => ids2.has(id)),
+        [...ids2].join(', '));
     } finally {
       child.kill();
       await fetch(`${SIM}/_sim/reset`).catch(() => {});

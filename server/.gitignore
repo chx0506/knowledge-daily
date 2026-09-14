@@ -3,3 +3,8 @@
 node_modules/
 *.log
 .DS_Store
+
+# 仿真样本：知乎开放平台真实响应（含作者名/头像/正文摘要）。
+# 本地跑 `npm run simulate` 需要它，但不入库——仓库是提交给评委的，
+# 避免把站内用户内容一并公开。从 dianzi-baozhi-data-api/samples/ 复制即可。
+samples/
