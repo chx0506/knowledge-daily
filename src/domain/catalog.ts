@@ -73,6 +73,19 @@ export const HOME_TABS: DomainId[] = [
   "culture",
 ];
 
+/**
+ * 本次真正出报的分版（推荐恒在首位）。
+ *
+ * 未生成 / 被 skipped 的领域不占 Tab —— 一个点了没有内容的版位比没有这个版更糟。
+ * 顺带修掉一个后果：homeTab 若停在未出报的领域上，会落到「今天没有送到」的空态，
+ * 这里统一回落到推荐版。
+ */
+export function visibleHomeTabs(paper: DailyPaper): DomainId[] {
+  return HOME_TABS.filter(
+    (id) => id === "recommend" || paper.domains.some((block) => block.domainId === id),
+  );
+}
+
 export const BOARD_ORDER: DomainId[] = ["tech", "finance", "domestic", "world", "culture", "life"];
 
 export function domainMeta(id: DomainId): DomainMeta {

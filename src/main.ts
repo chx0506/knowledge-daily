@@ -31,7 +31,7 @@ async function probeAuth(): Promise<AuthView> {
     const [me, health] = await Promise.all([api.authMe(), api.health()]);
     const oauthReady = health.capabilities?.oauth_login !== false;
     return me.logged_in
-      ? { state: "in", name: me.user?.fullname ?? "知乎用户", oauthReady }
+      ? { state: "in", name: me.user?.fullname ?? "知乎用户", avatar: me.user?.avatar, oauthReady }
       : { state: "out", oauthReady };
   } catch {
     return { state: "unknown", oauthReady: false };

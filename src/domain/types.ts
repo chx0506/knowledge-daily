@@ -230,6 +230,8 @@ export interface DossierView {
 export interface AuthView {
   state: "unknown" | "out" | "in";
   name?: string;
+  /** 已登录时的知乎头像地址（后端 /api/auth/me 的 user.avatar）。 */
+  avatar?: string;
   /** 后端未配置 OAuth 凭证时为 false，登录入口置灰。 */
   oauthReady: boolean;
 }

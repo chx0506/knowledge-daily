@@ -1,4 +1,4 @@
-import { HOME_TABS, domainMeta, findDomainBlock } from "@/domain/catalog";
+import { domainMeta, findDomainBlock, visibleHomeTabs } from "@/domain/catalog";
 import type { DailyPaper, DomainId, RouteName } from "@/domain/types";
 import { padIssue } from "@/shared/format";
 import { escapeHtml, html } from "@/shared/html";
@@ -174,7 +174,9 @@ function renderNotice(paper: DailyPaper): string {
 }
 
 export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, from: RouteName): string {
-  const homeTab = HOME_TABS.includes(state.homeTab) ? state.homeTab : "recommend";
+  // 只渲染本次真正出报的版：未生成的领域不占 Tab（点了没内容比没有更糟）
+  const tabs = visibleHomeTabs(paper);
+  const homeTab = tabs.includes(state.homeTab) ? state.homeTab : "recommend";
   return html`
     <header class="front-mast">
       ${renderNameplate("mast")}
@@ -189,15 +191,14 @@ export function renderFrontNewspaper(state: RuntimeState, paper: DailyPaper, fro
     ${renderNotice(paper)}
 
     <nav class="home-tabs" data-home-tabs>
-      ${HOME_TABS.map((id) => {
+      ${tabs.map((id) => {
         const meta = domainMeta(id);
-        const skipped = id !== "recommend" && !paper.domains.some((block) => block.domainId === id);
-        return `<button class="home-tab${homeTab === id ? " is-active" : ""}${skipped ? " is-skipped" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}</button>`;
+        return `<button class="home-tab${homeTab === id ? " is-active" : ""}" type="button" data-action="select-home-tab" data-domain-id="${id}">${meta.name}</button>`;
       }).join("")}
     </nav>
 
     <div class="home-swipe" data-home-swipe>
-      ${HOME_TABS.map(
+      ${tabs.map(
         (id) => html`
           <section class="home-pane${homeTab === id ? " is-active" : ""}" data-home-pane="${id}">
             ${renderPane(state, paper, id, from)}
@@ -221,8 +222,10 @@ export function mountFrontNewspaper(root: HTMLElement, state: RuntimeState, acti
   const tabs = root.querySelector<HTMLElement>("[data-home-tabs]");
   if (!swipe) return;
 
-  const index = Math.max(0, HOME_TABS.indexOf(state.homeTab));
-  const last = HOME_TABS.length - 1;
+  // 与 render 同源：横滑索引必须按「实际渲染出来的版」算，否则会和 Tab 错位
+  const visible = visibleHomeTabs(state.paper);
+  const index = Math.max(0, visible.indexOf(state.homeTab));
+  const last = visible.length - 1;
   const widthOf = () => swipe.clientWidth;
 
   const align = (behavior: ScrollBehavior = "auto") => {
@@ -237,7 +240,7 @@ export function mountFrontNewspaper(root: HTMLElement, state: RuntimeState, acti
   const go = (next: number) => {
     if (settling) return;
     const clamped = Math.max(0, Math.min(last, next));
-    const id = HOME_TABS[clamped];
+    const id = visible[clamped];
     if (!id) return;
     const width = widthOf();
     if (width > 0) swipe.scrollTo({ left: clamped * width, behavior: "smooth" });

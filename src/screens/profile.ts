@@ -109,6 +109,13 @@ export function renderProfile(state: RuntimeState): string {
   const { quotaUsed, quotaTotal, readerName, briefLength, morningPush, weekendSkip } = state.profile;
   const topics = state.selectedTopics;
   const remaining = Math.max(quotaTotal - quotaUsed, 0);
+  // 已登录时用知乎账号的头像与昵称，让「这是我的报」这件事在视觉上成立
+  const loggedIn = state.auth.state === "in";
+  const who = loggedIn ? (state.auth.name ?? readerName) : readerName;
+  const avatar = loggedIn && state.auth.avatar ? state.auth.avatar : KANSHAN_AVATAR_SRC;
+  const idNote = loggedIn
+    ? `按你知乎账号的关注、收藏与创作编排，已存 ${state.archive.length} 份。`
+    : `看山按你的领域编排今日一报，已存 ${state.archive.length} 份。`;
 
   return html`
     <div class="mine">
@@ -120,13 +127,13 @@ export function renderProfile(state: RuntimeState): string {
       <section class="mine-id">
         <div class="mine-avatar-wrap">
           <figure class="mine-avatar">
-            <img src="${KANSHAN_AVATAR_SRC}" alt="刘看山" />
+            <img src="${escapeHtml(avatar)}" alt="${escapeHtml(who)}" />
           </figure>
           <span class="mine-stamp">订</span>
         </div>
         <div class="mine-who">
-          <h1>${escapeHtml(readerName)}</h1>
-          <p>看山按你的领域编排今日一报，已存 ${state.archive.length} 份。</p>
+          <h1>${escapeHtml(who)}</h1>
+          <p>${idNote}</p>
         </div>
       </section>
 
