@@ -64,6 +64,8 @@ export function toSource(raw, { topic, kind, question }) {
     content_type: raw.ContentType ?? 'answer',
     vote_up_count: raw.VoteUpCount ?? 0,
     comment_count: raw.CommentCount ?? 0,
+    // 权威度等级（接口 1–5）：质量评分「可信度」维度的主依据
+    authority_level: Number(raw.AuthorityLevel ?? 0) || 0,
     question_title: question?.title ?? '',
     question_url: question?.url ?? '',
     platform: 'zhihu',
@@ -92,31 +94,113 @@ export function dedupe(sources) {
 // ---------------- 3. 质量与排序 ----------------
 
 /**
- * 质量 Agent + 排序（方案 6）
- * 推荐分 = 兴趣匹配×0.30 + 内容质量×0.25 + 时效性×0.15 + 观点价值×0.15 + 学习增益×0.15
+ * 质量与传播评分（100 分制）——依据《知乎内容与答主领域标签体系》表 5。
+ *
+ * 七个维度与满分：信息密度 25 / 可信度 20 / 观点独特性 15 / 争议与讨论度 15 /
+ * 故事与情绪 10 / 时效性 10 / 可传播性 5。
+ *
+ * 接口能拿到的字段有限，每个维度用可得信号做**确定性代理**（口径写在下方注释里）：
+ * 不用 AI 打分，同一篇内容任何时候得分一致，可复现、可解释、可对账。
+ */
+export const QUALITY_DIMENSIONS = [
+  { id: 'Q001', name: '信息密度', max: 25 },
+  { id: 'Q002', name: '可信度', max: 20 },
+  { id: 'Q003', name: '观点独特性', max: 15 },
+  { id: 'Q004', name: '争议与讨论度', max: 15 },
+  { id: 'Q005', name: '故事与情绪', max: 10 },
+  { id: 'Q006', name: '时效性', max: 10 },
+  { id: 'Q007', name: '可传播性', max: 5 },
+];
+
+const RE_DIGIT = /\d/;
+const RE_OPINION = /(认为|其实|误区|反对|不认同|恰恰|真正|未必|并不是|争议|分歧)/;
+const RE_STORY = /(我|自己|亲历|经历|那年|当时|后来)/;
+
+function qualityScore(s, maxVote) {
+  const text = s.excerpt ?? '';
+  // Q001 信息密度：摘要长度 + 是否含数字 + 分句密度（有结构＝信息更密）
+  const density = 25 * (
+    0.5 * Math.min(1, text.length / 240)
+    + 0.2 * (RE_DIGIT.test(text) ? 1 : 0)
+    + 0.3 * Math.min(1, (text.match(/[。；，]/g)?.length ?? 0) / 8)
+  );
+  // Q002 可信度：权威度等级（接口 1–5）；接口未给时，问题下的回答天然带作者背书
+  const auth = Number(s.authority_level ?? 0);
+  const trust = 20 * (auth >= 1
+    ? Math.min(1, auth / 5)
+    : (s.kind === 'question_answer' ? 0.6 : 0.4));
+  // Q003 观点独特性：含判断/反驳语汇；回答型天然形成观点对照
+  const opinion = 15 * (
+    0.6 * (RE_OPINION.test(text) ? 1 : 0) + 0.4 * (s.kind === 'question_answer' ? 1 : 0.3)
+  );
+  // Q004 争议与讨论度：评论/点赞比——高评论低点赞＝有真实分歧
+  const votes = Math.max(0, s.vote_up_count ?? 0);
+  const comments = Math.max(0, s.comment_count ?? 0);
+  const debate = 15 * (votes > 0
+    ? Math.min(1, (comments / votes) * 3)
+    : (comments > 0 ? 1 : 0));
+  // Q005 故事与情绪：第一人称与时间叙事标记
+  const story = 10 * (RE_STORY.test(text) ? 1 : 0.3);
+  // Q006 时效性：热榜来源视为当下事件；其余给基准分
+  const freshness = 10 * (s.kind === 'hot_item' ? 1 : 0.5);
+  // Q007 可传播性：点赞量对数归一
+  const spread = 5 * (Math.log10(1 + votes) / Math.log10(1 + maxVote));
+
+  const parts = {
+    Q001: density, Q002: trust, Q003: opinion, Q004: debate,
+    Q005: story, Q006: freshness, Q007: spread,
+  };
+  const round = (n) => Number(n.toFixed(2));
+  return {
+    total: round(Object.values(parts).reduce((a, b) => a + b, 0)),
+    parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, round(v)])),
+  };
+}
+
+/**
+ * 排序：兴趣匹配 × 0.35 + 质量分（100 制） × 0.65。
+ *
+ * 与旧式（兴趣.30 + 质量.25 + 时效.15 + 观点.15 + 学习.15）的差别：
+ * 时效/观点/故事已经是质量分的独立维度，不再重复计权；
+ * 排序理由因此可以按表 5 的口径逐项对账，而不是五个含义模糊的权重。
  */
 export function scoreSources(sources, { topicWeight = 0.6 } = {}) {
-  const maxVote = Math.max(...sources.map((s) => s.vote_up_count), 1);
+  const maxVote = Math.max(...sources.map((s) => s.vote_up_count ?? 0), 1);
   return sources.map((s) => {
-    const interest = topicWeight;
-    // 内容质量：摘要长度体现解释深度，互动量体现认可度
-    const depth = Math.min(1, s.excerpt.length / 180);
-    const social = Math.log10(1 + s.vote_up_count) / Math.log10(1 + maxVote || 10);
-    const quality = 0.6 * depth + 0.4 * Math.min(1, social);
-    // 时效性：接口未普遍返回时间，热榜来源视为高时效
-    const freshness = s.kind === 'hot_item' ? 1 : 0.5;
-    // 观点价值：问题下的回答天然形成观点对照
-    const opinion = s.kind === 'question_answer' ? 0.9 : 0.5;
-    // 学习增益：有具体解释与案例的更高
-    const learning = Math.min(1, (s.excerpt.match(/[。；，]/g)?.length ?? 0) / 6);
-
-    const score = interest * 0.30 + quality * 0.25 + freshness * 0.15
-      + opinion * 0.15 + learning * 0.15;
-    return { ...s, _score: Number(score.toFixed(4)) };
+    const quality = qualityScore(s, maxVote);
+    const score = topicWeight * 0.35 + (quality.total / 100) * 0.65;
+    return { ...s, _quality: quality, _score: Number(score.toFixed(4)) };
   }).sort((a, b) => b._score - a._score);
 }
 
 // ---------------- 4. 领域调研（直答）+ 校验 ----------------
+
+/**
+ * 日报角色（D001–D005）——依据《知乎内容与答主领域标签体系》表 6。
+ *
+ * 每篇推荐原文在报纸里承担一个角色，而不是并列堆三篇。
+ * 其中 D003「异议/反方稿」是硬要求：一份只呈现单一结论的报纸不成立。
+ */
+export const REPORT_ROLES = {
+  D001: { key: 'narrative', label: '主叙事', desc: '定义今天在谈什么', required: true },
+  D002: { key: 'explainer', label: '专业解释', desc: '解释为什么，提供知识底座', required: true },
+  D003: { key: 'dissent', label: '异议', desc: '提供冲突，避免单一结论', required: true },
+  D004: { key: 'experience', label: '个体经验', desc: '把抽象议题落到真实的人', required: false },
+  D005: { key: 'trend', label: '趋势延伸', desc: '把当下问题连接未来', required: false },
+};
+
+const ROLE_IDS = Object.keys(REPORT_ROLES);
+
+/** 角色分配兜底：AI 未给或给重时，按质量分顺位补一个尚未占用的必需角色 */
+function fillRoles(recs, tierSpec) {
+  const used = new Set(recs.map((r) => r.role).filter(Boolean));
+  const pending = ROLE_IDS.filter((id) => REPORT_ROLES[id].required && !used.has(id));
+  return recs.map((r) => {
+    if (r.role && ROLE_IDS.includes(r.role)) return r;
+    const id = pending.shift() ?? 'D001';
+    return { ...r, role: id };
+  });
+}
 
 function sourceDigestForPrompt(sources, limit = 8) {
   return sources.slice(0, limit).map((s, i) =>
@@ -162,8 +246,14 @@ ${sourceDigestForPrompt(sources)}
 {
   "judgement": "今日判断一句话，≤40字",
   "report": "短调研正文，恰好 3 段，${tierSpec.minWords}-${tierSpec.maxWords} 字，段与段之间空一行。写给「你」：只说市面上这件事进展到哪、有哪几派经验、对你意味着什么",
-  "recommended": [{ "source_id": "上文出现过的 id", "why_now": "为什么现在读，≤40字" }]
+  "recommended": [{ "source_id": "上文出现过的 id", "why_now": "为什么现在读，≤40字", "role": "D001|D002|D003|D004|D005" }]
 }
+推荐要按「日报角色」分配，而不是并列堆几篇：
+  D001 主叙事稿——定义今天在谈什么（故事线完整的事件/人物/现象）
+  D002 专业解释稿——解释为什么，提供知识底座（有数据或机制解释）
+  D003 异议/反方稿——**必须有一篇**：与主叙事存在真实分歧或相反立场
+  D004 个体经验稿——一手经历，把抽象议题落到真实的人（可选）
+  D005 趋势延伸稿——把当下问题连接未来（可选）
 要求：recommended 给 ${tierSpec.recs} 篇，只荐高质量、有经验或有分歧的；所有 source_id 必须来自上面出现过的 id。judgement 与 report 只写领域内容本身（市面进展、经验派别、对你的意义），禁止评论信号强弱、依据数字、选题面宽窄、材料与你的交集有无这类元信息；材料与用户兴趣关系弱时，就事论事写材料反映的市面进展即可。`;
 
   const raw = await zhidaJson(prompt, { model: 'zhida-fast-1p5', timeoutMs: 50000 });
@@ -179,13 +269,16 @@ ${sourceDigestForPrompt(sources)}
   const seen = new Set();
   const recs = (Array.isArray(raw.recommended) ? raw.recommended : [])
     .filter((r) => r && pool.has(r.source_id) && !seen.has(r.source_id) && seen.add(r.source_id))
-    .map((r) => ({ source_id: r.source_id, why_now: clip(r.why_now ?? '', 60) }))
+    .map((r) => {
+      const role = ROLE_IDS.includes(String(r.role ?? '').trim()) ? String(r.role).trim() : null;
+      return { source_id: r.source_id, why_now: clip(r.why_now ?? '', 60), role };
+    })
     .filter((r) => r.why_now);
 
   return {
     judgement,
     report,
-    recommended: fillRecommended(recs, sources, tierSpec),
+    recommended: fillRoles(fillRecommended(recs, sources, tierSpec), tierSpec),
     generated_by: 'zhida',
   };
 }
@@ -223,9 +316,11 @@ export function curateDomainRule({ def, tierSpec, sources, leadQuestion }) {
   return {
     judgement,
     report: hardClip(clip(report, 800), 800),
+    // 规则版按顺位覆盖三个必需角色，结构与 AI 版一致（含异议位，避免单一结论）
     recommended: sources.slice(0, tierSpec.recs).map((s, idx) => ({
       source_id: s.source_id,
       why_now: `今日「${def.name}」领域评分第 ${idx + 1} 的原文，建议先读。`,
+      role: ROLE_IDS[idx] ?? 'D001',
     })),
     generated_by: 'rule_fallback',
   };

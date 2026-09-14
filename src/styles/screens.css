@@ -2084,6 +2084,20 @@
   letter-spacing: 0.06em;
 }
 
+/* 日报角色徽标（D001–D005）：与来源徽标区分——来源答"从哪来"，角色答"在报纸里演什么" */
+.brief-role-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--red);
+  border-radius: 2px;
+  color: var(--red);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .brief-feedback {
   display: inline-flex;
   gap: 10px;

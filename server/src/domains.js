@@ -7,6 +7,7 @@
 import {
   getSearch, getHot,
   toSource, dedupe, scoreSources, curateDomainAI, curateDomainRule, TIER_SPEC,
+  REPORT_ROLES,
 } from './curator.js';
 import { DOMAIN_WORKFLOWS } from './workflows.js';
 
@@ -485,15 +486,20 @@ export async function buildDomainReport(ctx, {
     curated = curateDomainRule({ def, tierSpec, sources: scored, leadQuestion: null });
   }
 
-  // AI 只给 source_id 与 why_now；标题 / 作者 / 链接 / 来源类型从池中取回，保证链接真实
+  // AI 只给 source_id / why_now / role；标题 / 作者 / 链接 / 来源类型从池中取回，保证链接真实
   const byId = new Map(scored.map((s) => [s.source_id, s]));
   const recommended = curated.recommended
     .map((r) => {
       const s = byId.get(r.source_id);
+      const role = REPORT_ROLES[r.role];
       return s ? {
         source_id: s.source_id, title: s.title, author: s.author,
         author_url: s.author_url ?? null,   // C1：无 UrlToken 时为 null，绝不编造
         source_type: s.source_type, why_now: r.why_now, url: s.url,
+        // 日报角色（D001–D005，表 6）：这篇在报纸里演什么；AI 分配 + 后端校验兜底
+        ...(role ? { role: r.role, role_key: role.key, role_label: role.label } : {}),
+        // 质量分（100 制，表 5）：确定性代理打分，可解释、可对账
+        ...(s._quality ? { quality: s._quality } : {}),
       } : null;
     })
     .filter(Boolean);

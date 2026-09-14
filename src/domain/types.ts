@@ -49,6 +49,8 @@ export interface DomainReading {
   sourceType?: string;
   /** 后端 source_id，阅读反馈（/api/feedback）的 card_id。 */
   cardId?: string;
+  /** D001–D005 日报角色标签（主叙事 / 专业解释 / 异议 / 个体经验 / 趋势延伸）。 */
+  roleLabel?: string;
 }
 
 export interface DomainStory {

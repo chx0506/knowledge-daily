@@ -83,6 +83,8 @@ function mapReadings(domain: RemoteDomainReport): DomainReading[] {
     url: item.url,
     sourceType: item.source_type,
     cardId: item.source_id,
+    // D001–D005 日报角色：告诉读者这篇在报纸里演什么（主叙事 / 异议 / 个体经验…）
+    roleLabel: item.role_label,
   }));
 }
 

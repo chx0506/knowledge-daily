@@ -84,6 +84,12 @@ export interface RemoteRecommended {
   source_type: RemoteSourceType;
   why_now: string;
   url: string;
+  /** D001–D005：这篇在报纸里承担的角色（主叙事 / 专业解释 / 异议 / 个体经验 / 趋势延伸）。 */
+  role?: string;
+  role_key?: string;
+  role_label?: string;
+  /** 质量与传播评分（100 制）：{ total, parts }。 */
+  quality?: { total: number; parts: Record<string, number> };
 }
 
 export interface RemoteSourceIndexItem {

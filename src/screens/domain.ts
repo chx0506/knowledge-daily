@@ -27,7 +27,7 @@ function renderBriefing(state: RuntimeState, article: DomainStory, topic: string
                 return html`
                   <article class="brief-reading">
                     <b>${index + 1}. ${item.title}</b>
-                    <span>${item.sourceType ? `<em class="brief-source-badge">${item.sourceType}</em>` : ""}${item.source}</span>
+                    <span>${item.sourceType ? `<em class="brief-source-badge">${item.sourceType}</em>` : ""}${item.roleLabel ? `<em class="brief-role-badge">${item.roleLabel}</em>` : ""}${item.source}</span>
                     <p>${item.why}</p>
                     <button type="button" data-action="open-source" data-url="${item.url}">打开原文 →</button>
                     ${item.cardId
