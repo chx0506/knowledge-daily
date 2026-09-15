@@ -20,19 +20,77 @@ function wrapStamp(title: string): string {
   return wrapLines(lines);
 }
 
+/**
+ * 一个 token 占几个「全角字」。汉字与全角标点（，。、）各占一个全角位；
+ * 半角串（Demo / Coding / AI Agent）按两字符折一个字，空格不计宽。
+ *
+ * 这里踩过三个坑，每一个都会把首页标题切掉半个字：
+ *   1. 曾把「，。、」当零宽处理（`continue`，不计宽度）——但全角逗号的字宽与汉字
+ *      完全相同，于是「产，品形态与赛」这种 7 个全角字的行会被判成 6 字，照样溢出；
+ *   2. 半角串曾写 `Math.min(tok.length, 2)`，即无论多长都只算 2 字——
+ *      "Coding" 实际占 3 个全角位，被低估了 1 字；
+ *   3. 分词正则的兜底分支是 `[^\sA-Za-z0-9，。、]`，**空格不被任何分支匹配**，
+ *      于是 "AI Agent" 直接连成 "AIAgent" 显示出去。现在半角串允许内部含空格。
+ */
+function tokenUnits(token: string): number {
+  return /^[A-Za-z0-9]/.test(token)
+    ? Math.max(1, Math.ceil(token.replace(/\s+/g, "").length / 2))
+    : 1;
+}
+
+function splitTokens(text: string): string[] {
+  return text.match(/[A-Za-z0-9]+(?:[ \t]+[A-Za-z0-9]+)*|[，。、]|[^\sA-Za-z0-9，。、]/g) ?? [];
+}
+
+function chunkUnits(text: string): number {
+  return splitTokens(text).reduce((sum, tok) => sum + tokenUnits(tok), 0);
+}
+
 function wrapHeadline(title: string, maxChars = 6): string {
-  const phrases = title.split(/(?<=[，。、])/).filter(Boolean);
   const chunks: string[] = [];
-  for (const phrase of phrases) {
-    const tokens = phrase.match(/[A-Za-z0-9]+|[，。、]|[^\sA-Za-z0-9，。、]/g) ?? [];
+
+  /**
+   * 按标点切出来的一句话排完后，如果末行只剩 1–2 个字（排版上的「孤字」），
+   * 就把它并回上一行；并回去会超宽时，把这两行按字数对半重排。
+   *
+   * 旧写法只在**整段标题**的最后两行上做这件事，且判据是字符数
+   * （`prev.length <= 6`）——合并后能到 8 个字，408px 手机骨架里正文列可用宽度
+   * 只有 214px，34px 字号下 8 个字要 250px，仍会被 overflow:hidden 切掉半个字；
+   * 而句子中间的孤字（「把判断留给自 / 己，/ 先通读原典再…」）则完全没人管。
+   * 现在每句话排完就修一次，任何一条路径都不会产出超过 maxChars 的行。
+   */
+  const balanceTail = (from: number) => {
+    const n = chunks.length;
+    if (n - from < 2) return;                                  // 这句话只排出一行，没什么可并
+    if (chunks[n - 1].replace(/[，。、]/g, "").length > 2) return; // 末行不是孤字
+    const merged = chunks[n - 2] + chunks[n - 1];
+    const mergedUnits = chunkUnits(merged);
+    if (mergedUnits <= maxChars) {
+      chunks.splice(n - 2, 2, merged);
+      return;
+    }
+    // 合并不下：对半重排，按 token 边界拆，不劈开英文单词
+    const toks = splitTokens(merged);
+    const target = Math.ceil(mergedUnits / 2);
+    let head = "";
+    let width = 0;
+    let i = 0;
+    for (; i < toks.length; i += 1) {
+      const unit = tokenUnits(toks[i]);
+      if (width + unit > target && head) break;
+      head += toks[i];
+      width += unit;
+    }
+    chunks.splice(n - 2, 2, head, toks.slice(i).join(""));
+  };
+
+  for (const phrase of title.split(/(?<=[，。、])/).filter(Boolean)) {
+    const from = chunks.length;
     let buf = "";
     let width = 0;
-    for (const tok of tokens) {
-      if (tok === "，" || tok === "。" || tok === "、") {
-        buf += tok;
-        continue;
-      }
-      const unit = /[A-Za-z0-9]/.test(tok) ? Math.min(tok.length, 2) : 1;
+    for (const tok of splitTokens(phrase)) {
+      const unit = tokenUnits(tok);
+      // `&& buf` 是兜底：单个 token 本身就超一行时也得先落进空行，否则会死循环
       if (width + unit > maxChars && buf) {
         chunks.push(buf);
         buf = tok;
@@ -43,11 +101,7 @@ function wrapHeadline(title: string, maxChars = 6): string {
       }
     }
     if (buf) chunks.push(buf);
-  }
-  const last = chunks.at(-1) ?? "";
-  const prev = chunks.at(-2) ?? "";
-  if (chunks.length >= 2 && last.replace(/[，。、]/g, "").length <= 2 && prev.length <= 6) {
-    chunks.splice(-2, 2, prev + last);
+    balanceTail(from);
   }
   return wrapLines(chunks);
 }

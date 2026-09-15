@@ -1682,7 +1682,22 @@
   margin: 10px 0 0;
   color: var(--red);
   font-family: var(--poster);
-  font-size: 42px;
+  /*
+    字号必须由「正文列能放几个字」倒推，不能凭手感给。
+
+    408px 机身 → .phone 是 border-box，减去 10px 边框×2 与 8px 内边距×2 = 372px；
+    .sheet-hero 网格是 minmax(0,1.32fr) minmax(132px,0.68fr)，右栏触到 132px 下限，
+    所以正文列 = 372 - 132 = 240px；再减 .sheet-hero-main 的 12/14px 内边距，
+    **标题真正可用宽度只有 214px**。
+
+    标题每行最多 6 个全角字（见 home.ts wrapHeadline 的 maxChars），
+    letter-spacing:-0.07em 下每个字实际占 font-size×0.93：
+      42px → 234.4px，超出 20px —— 每行最后一个字都被 overflow:hidden 切掉半个
+      38px → 212.0px，只剩 2px 余量，换个字形就会再溢出
+      34px → 189.7px，余 24px（约占列宽 89%）——留出安全边际
+    这也是「首页字太大」的根因：不是审美问题，是算错了容器宽度。
+  */
+  font-size: 34px;
   font-weight: var(--poster-weight);
   letter-spacing: -0.07em;
   line-height: 0.88;
