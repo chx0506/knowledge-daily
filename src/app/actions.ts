@@ -1,6 +1,6 @@
 import { AUTH_LOGIN_URL, api, isFixtureForced } from "@/data/remote/client";
 import { findInterestCard } from "@/data/mock/interest-cards";
-import { HOME_TABS, findDomainBlock } from "@/domain/catalog";
+import { findDomainBlock, isHomeTab } from "@/domain/catalog";
 import { stamp, startTyping, stopTyping } from "@/shared/typewriter-sound";
 import type { RemoteEdition } from "@/data/repositories/remote-edition-repo";
 import type { ArchiveRepo } from "@/data/repositories/archive-repo";
@@ -65,7 +65,11 @@ export function createActions(
 
     selectHomeTab(domainId: DomainId) {
       const state = store.get();
-      if (!HOME_TABS.includes(domainId) || state.homeTab === domainId) return;
+      // 守卫必须用「本次真的出报的领域」，不能再用某个固定名单：
+      // Tab 是 visibleHomeTabs() 按数据画出来的，守卫若按常量判，
+      // 常量之外的领域（国内 / 国际 / 游戏 / 设计 / 科学 / 旅行）就会
+      // 画得出一个可点的按钮、点下去却被静默吞掉 —— 两套名单不一致的典型症状。
+      if (!isHomeTab(editionOf(state), domainId) || state.homeTab === domainId) return;
       store.set({
         homeTab: domainId,
         domainId: domainId === "recommend" ? null : domainId,
@@ -74,7 +78,8 @@ export function createActions(
     },
 
     openHomeStory(domainId: DomainId, storyId: string | null) {
-      if (!HOME_TABS.includes(domainId)) {
+      // 同上：本次首页没有这个分版才送去领域页；有分版就留在首页切 Tab
+      if (!isHomeTab(editionOf(store.get()), domainId)) {
         store.set({
           route: "domain",
           domainId,

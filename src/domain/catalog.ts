@@ -65,28 +65,35 @@ export const DOMAIN_CATALOG: DomainMeta[] = [
   },
 ];
 
-export const HOME_TABS: DomainId[] = [
-  "recommend",
-  "finance",
-  "tech",
-  "life",
-  "culture",
-];
-
 /**
- * 本次真正出报的分版（推荐恒在首位）。
+ * 首页分版 Tab 的顺序 = **后端给出的数据顺序**，推荐恒在首位。
  *
- * 未生成 / 被 skipped 的领域不占 Tab —— 一个点了没有内容的版位比没有这个版更糟。
- * 顺带修掉一个后果：homeTab 若停在未出报的领域上，会落到「今天没有送到」的空态，
- * 这里统一回落到推荐版。
+ * 这里原本是一个 `HOME_TABS` 常量，写死「推荐 → 财经 → 科技 → 生活 → 文化」。
+ * 它带来三个后果，最后一个才是真正要命的：
+ *
+ *   1. 把主领域压到最右。后端 `daily.js` 的 genOrder 是「主领域 → 依据分从高到低」，
+ *      推荐页据此写「文化版先读（依据最强，信号分 10.5）」，可 Tab 上文化却排在最右边，
+ *      同一屏里自相矛盾。
+ *   2. 常量之外的领域（国内 / 国际 / 游戏 / 设计 / 科学 / 旅行）出报时只能被追加到末尾，
+ *      排序权在常量手里，而不是在算分的那一侧。
+ *   3. **Tab 渲染出来了却点不动**：actions.ts 用同一个常量做守卫
+ *      （`if (!HOME_TABS.includes(domainId)) return;`），于是「国际」这种领域
+ *      明明在 nav 里画出了一个可点的按钮，点下去却被守卫静默吞掉——
+ *      渲染用的是「本次真的出报的领域」，守卫用的却是「常量里写过的领域」，两套名单。
+ *
+ * 现在两份名单合并成一份：出报顺序就是 `paper.domains` 的顺序，
+ * 前端不再持有第二份「哪些领域算分版」的名单。
  */
 export function visibleHomeTabs(paper: DailyPaper): DomainId[] {
-  const present = paper.domains.map((block) => block.domainId);
-  // 先按 HOME_TABS 的固定次序排（推荐恒在首位），再补上常量之外、本次真的出报的领域——
-  // 否则「国内 / 国际」这类没写进 HOME_TABS 的领域会出内容却没有入口可进。
-  const ordered = HOME_TABS.filter((id) => id === "recommend" || present.includes(id));
-  const extra = present.filter((id) => !HOME_TABS.includes(id) && id !== "recommend");
-  return [...ordered, ...extra];
+  const present = paper.domains
+    .map((block) => block.domainId)
+    .filter((id) => id !== "recommend");
+  return ["recommend", ...present];
+}
+
+/** 本次首页有没有这个分版（推荐恒有）。Tab 点击是否有效，一律以此为准。 */
+export function isHomeTab(paper: DailyPaper, domainId: DomainId): boolean {
+  return visibleHomeTabs(paper).includes(domainId);
 }
 
 export const BOARD_ORDER: DomainId[] = ["tech", "finance", "domestic", "world", "culture", "life"];
